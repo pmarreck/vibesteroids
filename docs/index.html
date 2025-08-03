@@ -798,8 +798,9 @@
                     
                     // Convert Y delta to angle delta (linear mapping)
                     // Full screen height = 4π radians (2 full rotations)
+                    // Negate to make stroking up rotate right, stroking down rotate left
                     const angleRange = 4 * Math.PI;
-                    const angleDelta = (yDelta / GAME_HEIGHT) * angleRange;
+                    const angleDelta = -(yDelta / GAME_HEIGHT) * angleRange;
                     
                     // Apply rotation relative to ship's starting angle
                     GameState.ship.angle = shipStartAngle + angleDelta;
