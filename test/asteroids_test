@@ -136,6 +136,10 @@ global.it = function(name, fn) {
         console.log(`  ✗ ${name}: ${e.message}`);
     }
     testTotal++;
+    // Debug logging to see if counters are being updated
+    if (testTotal % 20 === 0) {
+        console.log(`[DEBUG] Test count: ${testTotal}, Failures: ${testFailures}`);
+    }
 };
 
 global.beforeEach = function(fn) {

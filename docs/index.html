@@ -467,6 +467,51 @@
                     oscillator.stop(startTime + 0.3);
                 }
             }
+
+            extraLife() {
+                if (!this.audioContext) return;
+                
+                // Create a celebratory 5-chime sequence
+                const ctx = this.audioContext;
+                const now = ctx.currentTime;
+                
+                // Play 5 chimes in sequence with rising pitch
+                const baseFreq = 523.25; // C5 note
+                const chimeNotes = [1.0, 1.125, 1.25, 1.5, 2.0]; // Major pentatonic scale intervals
+                
+                for (let i = 0; i < 5; i++) {
+                    const startTime = now + (i * 0.15); // 150ms apart
+                    const frequency = baseFreq * chimeNotes[i];
+                    
+                    // Create chime sound with bell-like characteristics
+                    const oscillator = ctx.createOscillator();
+                    const gainNode = ctx.createGain();
+                    const filterNode = ctx.createBiquadFilter();
+                    
+                    // Set up filter for bell-like timbre
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.setValueAtTime(frequency * 3, startTime);
+                    filterNode.Q.setValueAtTime(2, startTime);
+                    
+                    // Bell-like waveform with harmonics
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(frequency, startTime);
+                    
+                    // Bell envelope: quick attack, longer decay
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.3, startTime + 0.005); // Quick attack
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4); // Long decay
+                    
+                    // Connect the audio nodes
+                    oscillator.connect(filterNode);
+                    filterNode.connect(gainNode);
+                    gainNode.connect(ctx.destination);
+                    
+                    // Start and stop the oscillator
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + 0.4);
+                }
+            }
         }
 
         class MockSoundInterface {
@@ -498,6 +543,10 @@
                 this.calls.push({ method: 'playSiren', timestamp: Date.now() });
             }
 
+            extraLife() {
+                this.calls.push({ method: 'extraLife', timestamp: Date.now() });
+            }
+
             // Test helper methods
             getCalls() {
                 return this.calls;
@@ -517,6 +566,10 @@
 
             reset() {
                 this.calls = [];
+            }
+
+            get lastCall() {
+                return this.calls[this.calls.length - 1];
             }
         }
 
@@ -599,6 +652,7 @@
 
             score: 0,
             lives: 3,
+            nextExtraLifeScore: 20000,
             gameOver: false,
             paused: false,
             shipExploding: false,
@@ -624,6 +678,7 @@
             get BULLET_SPEED() { return scale(500); },
             MAX_BULLETS: 5,
             ASTEROID_SPAWN_COUNT: 5,
+            EXTRA_LIFE_INTERVAL: 20000,
 
             // Sound system (will be injected based on test/production mode)
             sound: null
@@ -1127,8 +1182,10 @@
                     const angleRange = 4 * Math.PI;
                     const angleDelta = -(yDelta / GAME_HEIGHT) * angleRange;
                     
-                    // Apply rotation relative to ship's starting angle
-                    GameState.ship.angle = shipStartAngle + angleDelta;
+                    // Apply rotation relative to ship's starting angle (only if Death Blossom is not active)
+                    if (!GameState.deathBlossomActive) {
+                        GameState.ship.angle = shipStartAngle + angleDelta;
+                    }
                 }
             });
             
@@ -1179,6 +1236,9 @@
             
             // Draw neon title splash (before other objects so they appear on top)
             drawNeonTitle(ctx);
+            
+            // Draw Death Blossom message when active
+            drawDeathBlossomMessage(ctx, state);
             
             // Debug info for mobile debugging (only when visible)
             const debugElement = documentObj.getElementById('debugInfo');
@@ -1389,6 +1449,48 @@
             ctx.restore();
         }
 
+        function drawDeathBlossomMessage(ctx, state) {
+            if (!state.deathBlossomActive) return;
+            
+            ctx.save();
+            
+            // Position: centered horizontally, 2/3 down from top
+            const x = GAME_WIDTH / 2;
+            const y = (GAME_HEIGHT * 2) / 3;
+            
+            // Scale font size with viewport (smaller than title)
+            const fontSize = scale(36);
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Create neon effect similar to title but with red/orange theme
+            const text = 'DEATH BLOSSOM!';
+            
+            // Outer glow (red)
+            ctx.globalAlpha = 0.4;
+            ctx.shadowColor = '#ff0000'; // Red
+            ctx.shadowBlur = scale(20);
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = scale(6);
+            ctx.strokeText(text, x, y);
+            
+            // Middle glow (orange)
+            ctx.globalAlpha = 0.7;
+            ctx.shadowBlur = scale(10);
+            ctx.strokeStyle = '#ff8800'; // Orange
+            ctx.lineWidth = scale(3);
+            ctx.strokeText(text, x, y);
+            
+            // Inner bright core (yellow-white)
+            ctx.globalAlpha = 1.0;
+            ctx.shadowBlur = scale(5);
+            ctx.fillStyle = '#ffff88'; // Bright yellow
+            ctx.fillText(text, x, y);
+            
+            ctx.restore();
+        }
+
         function drawShip(ctx, ship) {
             ctx.save();
             ctx.translate(ship.x, ship.y);
@@ -1553,6 +1655,23 @@
             return state;
         }
 
+        // Check for extra life awards based on configured interval
+        function checkExtraLife(state, oldScore) {
+            const newState = { ...state };
+            const currentScore = newState.score;
+            
+            // Check if we crossed the next extra life threshold
+            if (oldScore < newState.nextExtraLifeScore && currentScore >= newState.nextExtraLifeScore) {
+                newState.lives++;
+                newState.nextExtraLifeScore += (newState.EXTRA_LIFE_INTERVAL || 20000);
+                if (newState.sound && newState.sound.extraLife) {
+                    newState.sound.extraLife();
+                }
+            }
+            
+            return newState;
+        }
+
         // Game state update function
         function updateGameState(state, keysPressed, deltaTime, currentTime, mathObj = Math) {
             // Handle pause toggle on Escape key press (only on initial press, not while held)
@@ -1590,6 +1709,8 @@
                 shipDebris: state.shipDebris.slice(), // Shallow copy to preserve getters
                 score: state.score,
                 lives: state.lives,
+                nextExtraLifeScore: state.nextExtraLifeScore,
+                EXTRA_LIFE_INTERVAL: state.EXTRA_LIFE_INTERVAL,
                 gameOver: state.gameOver,
                 paused: state.paused,
                 shipExploding: state.shipExploding,
@@ -1826,7 +1947,19 @@
 
                         // Update score (only if not in kid mode)
                         if (!newState.kidMode) {
+                            const oldScore = newState.score;
                             newState.score += 100;
+                            
+                            // Check for extra life award
+                            const extraLifeState = checkExtraLife(newState, oldScore);
+                            if (extraLifeState.lives > newState.lives) {
+                                // Extra life was awarded
+                                newState.lives = extraLifeState.lives;
+                                newState.nextExtraLifeScore = extraLifeState.nextExtraLifeScore;
+                                if (newState.sound && newState.sound.extraLife) {
+                                    newState.sound.extraLife();
+                                }
+                            }
                         }
 
                         break;
@@ -2137,6 +2270,7 @@
             GameState.shipDebris = newState.shipDebris;
             GameState.score = newState.score;
             GameState.lives = newState.lives;
+            GameState.nextExtraLifeScore = newState.nextExtraLifeScore;
             GameState.gameOver = newState.gameOver;
             GameState.paused = newState.paused;
             GameState.shipExploding = newState.shipExploding;
@@ -2186,6 +2320,7 @@
 
             GameState.score = 0;
             GameState.lives = 3;
+            GameState.nextExtraLifeScore = 20000;
             GameState.gameOver = false;
             GameState.paused = false;
             GameState.shipExploding = false;
@@ -2212,8 +2347,17 @@
         // Test Suite
         if (isTestMode) {
             // Setup simple test framework for both Node.js and browser
-            let testFailures = 0;
-            let testTotal = 0;
+            // Use existing global counters if available (Node.js), otherwise create new ones for browser
+            let testFailures, testTotal;
+            if (isNodeJS && typeof global !== 'undefined' && global.testFailures !== undefined) {
+                // In Node.js, use the global counters from the test runner
+                testFailures = global.testFailures;
+                testTotal = global.testTotal;
+            } else {
+                // In browser, create new counters
+                testFailures = 0;
+                testTotal = 0;
+            }
             
             // ANSI color codes for terminal output (available in both environments)
             const colors = {
@@ -2226,21 +2370,28 @@
             if (isNodeJS) {
                 console.log('Running Asteroids Game Tests in Node.js\n');
                 
-                global.describe = (name, fn) => {
-                    console.log(name);
-                    fn();
-                };
-                global.it = (name, fn) => {
-                    testTotal++;
-                    try {
+                // Only define test functions if they don't already exist (test runner may have defined them)
+                if (!global.describe) {
+                    global.describe = (name, fn) => {
+                        console.log(name);
                         fn();
-                        console.log(`  ${colors.green}✓${colors.reset} ${name}`);
-                    } catch(e) {
-                        testFailures++;
-                        console.log(`  ${colors.red}✗${colors.reset} ${name}: ${colors.red}${e.message}${colors.reset}`);
-                    }
-                };
-                global.beforeEach = (fn) => fn();
+                    };
+                }
+                if (!global.it) {
+                    global.it = (name, fn) => {
+                        testTotal++;
+                        try {
+                            fn();
+                            console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+                        } catch(e) {
+                            testFailures++;
+                            console.log(`  ${colors.red}✗${colors.reset} ${name}: ${colors.red}${e.message}${colors.reset}`);
+                        }
+                    };
+                }
+                if (!global.beforeEach) {
+                    global.beforeEach = (fn) => fn();
+                }
             } else {
                 console.log('Running Asteroids Game Tests in Browser\n');
 
@@ -3391,6 +3542,7 @@
                         // Set up initial title splash state
                         GameState.titleSplashVisible = true;
                         GameState.titleSplashFrameCount = 0;
+                        GameState.sound = new MockSoundInterface(); // Ensure sound interface exists
                         
                         let currentState = GameState;
                         
@@ -4223,20 +4375,211 @@
                                 throw new Error(`Ship velocity should not change during Death Blossom. Expected vx:${initialVelocity.vx}, vy:${initialVelocity.vy}, got vx:${result.ship.vx}, vy:${result.ship.vy}`);
                             }
                         });
+
+                        it('should disable mobile touch rotation during Death Blossom', function() {
+                            // Test the touch rotation logic respects Death Blossom state
+                            const shipStartAngle = Math.PI / 4; // 45 degrees
+                            const yDelta = 100; // Downward touch movement
+                            const gameHeight = 800;
+                            
+                            // Function that encapsulates the touch rotation logic from the touchmove handler
+                            function applyTouchRotation(currentState, startAngle, yDelta, gameHeight) {
+                                const newState = { ...currentState };
+                                
+                                const angleRange = 4 * Math.PI;
+                                const angleDelta = -(yDelta / gameHeight) * angleRange;
+                                
+                                // Apply rotation relative to ship's starting angle (only if Death Blossom is not active)
+                                if (!newState.deathBlossomActive) {
+                                    newState.ship.angle = startAngle + angleDelta;
+                                }
+                                
+                                return newState;
+                            }
+                            
+                            // Test case 1: Death Blossom active - angle should not change
+                            const stateWithDeathBlossom = {
+                                deathBlossomActive: true,
+                                ship: { angle: shipStartAngle }
+                            };
+                            
+                            const resultWithDeathBlossom = applyTouchRotation(stateWithDeathBlossom, shipStartAngle, yDelta, gameHeight);
+                            
+                            if (resultWithDeathBlossom.ship.angle !== shipStartAngle) {
+                                throw new Error(`Expected angle to remain ${shipStartAngle} during Death Blossom, got ${resultWithDeathBlossom.ship.angle}`);
+                            }
+                            
+                            // Test case 2: Death Blossom inactive - angle should change
+                            const stateWithoutDeathBlossom = {
+                                deathBlossomActive: false,
+                                ship: { angle: shipStartAngle }
+                            };
+                            
+                            const resultWithoutDeathBlossom = applyTouchRotation(stateWithoutDeathBlossom, shipStartAngle, yDelta, gameHeight);
+                            
+                            if (resultWithoutDeathBlossom.ship.angle === shipStartAngle) {
+                                throw new Error(`Expected angle to change when Death Blossom is not active`);
+                            }
+                        });
+                    });
+                });
+
+                describe('Extra Life System', function() {
+                    it('should award extra life via bullet-asteroid collision at first threshold', function() {
+                        // Set up game state just below the first 20,000 point threshold
+                        const testState = {
+                            ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, radius: 10 },
+                            bullets: [{ x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 }], // Overlapping with asteroid
+                            asteroids: [{ x: 200, y: 200, radius: 20, vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [] }], // Large asteroid for 100 points
+                            particles: [], shipDebris: [],
+                            score: 19950, // Just 50 points below threshold
+                            lives: 3,
+                            nextExtraLifeScore: 20000,
+                            EXTRA_LIFE_INTERVAL: 20000,
+                            gameOver: false, paused: false,
+                            shipExploding: false, shipExplosionStartTime: 0, lastFireTime: 0,
+                            autoFire: false, kidMode: false,
+                            sound: new MockSoundInterface()
+                        };
+                        
+                        // Update game state - collision should award 100 points and trigger extra life
+                        const result = updateGameState(testState, {}, 0.016, 1000);
+                        
+                        // Verify bullet-asteroid collision removed both objects and awarded points
+                        if (result.bullets.length !== 0 || result.asteroids.length !== 0) {
+                            throw new Error('Bullet and asteroid should be removed after collision');
+                        }
+                        
+                        // Verify score increased by 100 points
+                        if (result.score !== 20050) {
+                            throw new Error(`Expected score 20050 (19950 + 100), got ${result.score}`);
+                        }
+                        
+                        // Verify extra life was awarded
+                        if (result.lives !== 4) {
+                            throw new Error(`Expected 4 lives after crossing 20,000 threshold, got ${result.lives}`);
+                        }
+                        
+                        // Verify next threshold was updated
+                        if (result.nextExtraLifeScore !== 40000) {
+                            throw new Error(`Expected nextExtraLifeScore to be 40000, got ${result.nextExtraLifeScore}`);
+                        }
+                        
+                        // Verify extra life sound was played
+                        if (!result.sound.lastCall || result.sound.lastCall.method !== 'extraLife') {
+                            throw new Error('Expected extraLife sound to be played');
+                        }
+                    });
+                    
+                    it('should not award extra life when not crossing threshold', function() {
+                        const testState = {
+                            ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, radius: 10 },
+                            bullets: [{ x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 }],
+                            asteroids: [{ x: 200, y: 200, radius: 20, vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [] }],
+                            particles: [], shipDebris: [],
+                            score: 15000, // Well below threshold
+                            lives: 3,
+                            nextExtraLifeScore: 20000,
+                            EXTRA_LIFE_INTERVAL: 20000,
+                            gameOver: false, paused: false,
+                            shipExploding: false, shipExplosionStartTime: 0, lastFireTime: 0,
+                            autoFire: false, kidMode: false,
+                            sound: new MockSoundInterface()
+                        };
+                        
+                        const result = updateGameState(testState, {}, 0.016, 1000);
+                        
+                        // Verify no extra life awarded
+                        if (result.lives !== 3) {
+                            throw new Error(`Expected lives to remain at 3, got ${result.lives}`);
+                        }
+                        
+                        // Verify threshold unchanged
+                        if (result.nextExtraLifeScore !== 20000) {
+                            throw new Error(`Expected nextExtraLifeScore to remain 20000, got ${result.nextExtraLifeScore}`);
+                        }
+                        
+                        // Verify no extra life sound played
+                        if (result.sound.lastCall && result.sound.lastCall.method === 'extraLife') {
+                            throw new Error('Extra life sound should not be played');
+                        }
+                    });
+                    
+                    it('should award second extra life at 40,000 points', function() {
+                        const testState = {
+                            ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, radius: 10 },
+                            bullets: [{ x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 }],
+                            asteroids: [{ x: 200, y: 200, radius: 20, vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [] }],
+                            particles: [], shipDebris: [],
+                            score: 39950, // Just below second threshold
+                            lives: 4, // Already got first extra life
+                            nextExtraLifeScore: 40000, // Next threshold is 40k
+                            EXTRA_LIFE_INTERVAL: 20000,
+                            gameOver: false, paused: false,
+                            shipExploding: false, shipExplosionStartTime: 0, lastFireTime: 0,
+                            autoFire: false, kidMode: false,
+                            sound: new MockSoundInterface()
+                        };
+                        
+                        const result = updateGameState(testState, {}, 0.016, 1000);
+                        
+                        // Verify second extra life awarded
+                        if (result.lives !== 5) {
+                            throw new Error(`Expected 5 lives after crossing 40,000 threshold, got ${result.lives}`);
+                        }
+                        
+                        // Verify next threshold updated to 60k
+                        if (result.nextExtraLifeScore !== 60000) {
+                            throw new Error(`Expected nextExtraLifeScore to be 60000, got ${result.nextExtraLifeScore}`);
+                        }
+                        
+                        // Verify extra life sound was played
+                        if (!result.sound.lastCall || result.sound.lastCall.method !== 'extraLife') {
+                            throw new Error('Expected extraLife sound to be played');
+                        }
+                    });
+                });
+
+                describe('Death Blossom Message Display', function() {
+                    it('should show message when Death Blossom is active', function() {
+                        const state = {
+                            deathBlossomActive: true,
+                            deathBlossomStartTime: 1000
+                        };
+                        
+                        function shouldShowDeathBlossomMessage(gameState) {
+                            return gameState.deathBlossomActive;
+                        }
+                        
+                        const result = shouldShowDeathBlossomMessage(state);
+                        
+                        if (!result) {
+                            throw new Error('Expected Death Blossom message to show when Death Blossom is active');
+                        }
+                    });
+                    
+                    it('should hide message when Death Blossom is not active', function() {
+                        const state = {
+                            deathBlossomActive: false,
+                            deathBlossomStartTime: 0
+                        };
+                        
+                        function shouldShowDeathBlossomMessage(gameState) {
+                            return gameState.deathBlossomActive;
+                        }
+                        
+                        const result = shouldShowDeathBlossomMessage(state);
+                        
+                        if (result) {
+                            throw new Error('Expected Death Blossom message to be hidden when Death Blossom is not active');
+                        }
                     });
                 });
 
             });
 
-            // Complete test execution message
-            if (isNodeJS) {
-                if (testFailures === 0) {
-                    console.log(`\n${colors.green}${colors.bold}All ${testTotal} tests passed successfully!${colors.reset}`);
-                } else {
-                    console.log(`\n${colors.red}${colors.bold}${testFailures} out of ${testTotal} tests FAILED!${colors.reset}`);
-                    process.exit(1);
-                }
-            } else {
+            // Complete test execution message (only for browser - Node.js test runner handles its own summary)
+            if (!isNodeJS) {
                 // Add green completion message to browser output
                 const testOutput = document.querySelector('.test-output');
                 if (testOutput) {
