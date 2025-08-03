@@ -614,7 +614,9 @@
             deathBlossomActive: false,
             deathBlossomStartTime: 0,
             deathBlossomRotations: 0,
+            deathBlossomTotalAngleRotated: 0,
             deathBlossomAvailable: true,
+            DEATH_BLOSSOM_ROTATION_COUNT: 9, // Number of full rotations before Death Blossom ends (configurable)
 
             // Game constants (scaled dynamically)
             get SHIP_ACCELERATION() { return scale(300); },
@@ -635,7 +637,7 @@
             keysPressed[e.key] = true;
 
             // Hide cursor when user starts typing game controls
-            const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'f', 'F'];
+            const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'f', 'F', 'B'];
             if (gameKeys.includes(e.key)) {
                 document.body.classList.add('playing');
                 
@@ -669,6 +671,14 @@
             // Handle auto-fire toggle with F or Shift-F
             if (e.key === 'F' || e.key === 'f') {
                 GameState.autoFire = !GameState.autoFire;
+                e.preventDefault();
+            }
+
+            // Handle Death Blossom activation with B (secret, undocumented)
+            if (e.key === 'B' && GameState.deathBlossomAvailable && !GameState.deathBlossomActive && 
+                !GameState.gameOver && !GameState.shipExploding) {
+                const currentTime = Date.now();
+                activateDeathBlossom(GameState, currentTime);
                 e.preventDefault();
             }
 
@@ -722,6 +732,55 @@
         // Mobile touch controls
         let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         let touchStartY = null;
+
+        // Death Blossom shake detection for mobile
+        let shakeThreshold = 25; // Minimum acceleration magnitude to trigger (increased from 15)
+        let shakeCooldown = 2000; // Minimum time between shake detections (ms) (increased from 1000)
+        let lastShakeTime = 0;
+
+        function detectShakeThreshold(acceleration) {
+            const magnitude = Math.sqrt(
+                acceleration.x * acceleration.x + 
+                acceleration.y * acceleration.y + 
+                acceleration.z * acceleration.z
+            );
+            return magnitude > shakeThreshold;
+        }
+
+        let motionEventCount = 0;
+        function handleDeviceMotion(event) {
+            motionEventCount++;
+            
+            if (!event.accelerationIncludingGravity) {
+                if (motionEventCount === 1) updateDebug('No acceleration data available');
+                return;
+            }
+            
+            const acceleration = event.accelerationIncludingGravity;
+            const currentTime = Date.now();
+            
+            // Debug: show motion data on first event only
+            if (motionEventCount === 1) {
+                const magnitude = Math.sqrt(
+                    acceleration.x * acceleration.x + 
+                    acceleration.y * acceleration.y + 
+                    acceleration.z * acceleration.z
+                );
+                updateDebug(`Motion detection active - current magnitude: ${magnitude.toFixed(1)}, threshold: ${shakeThreshold}`);
+            }
+            
+            if (detectShakeThreshold(acceleration) && 
+                currentTime - lastShakeTime > shakeCooldown &&
+                GameState.deathBlossomAvailable &&
+                !GameState.deathBlossomActive &&
+                !GameState.gameOver &&
+                !GameState.shipExploding) {
+                
+                updateDebug('SHAKE DETECTED - Death Blossom activated!');
+                lastShakeTime = currentTime;
+                activateDeathBlossom(GameState, currentTime);
+            }
+        }
         let touchStartX = null;
         let isThrusting = false;
         let isRotaryTouching = false;
@@ -791,11 +850,226 @@
             // Disable general auto-fire on mobile (use touch-based firing instead)
             GameState.autoFire = false;
             
+            // Flags to track motion permission state
+            let motionPermissionRequested = false;
+            let motionPermissionGranted = false;
+            let userHasInteracted = false;
+            
+            // Debug function - logs to console instead of on-screen display
+            function updateDebug(message) {
+                console.log('[Vibesteroids Debug]', message);
+            }
+            
+            function requestMotionPermission() {
+                if (motionPermissionRequested) return Promise.resolve();
+                
+                motionPermissionRequested = true;
+                updateDebug('Requesting motion permission...');
+                
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS 13+ requires permission request from user gesture
+                    updateDebug('iOS 13+ detected');
+                    return DeviceMotionEvent.requestPermission()
+                        .then(response => {
+                            updateDebug('Permission: ' + response);
+                            if (response === 'granted') {
+                                motionPermissionGranted = true;
+                                window.addEventListener('devicemotion', handleDeviceMotion, true);
+                                updateDebug('Motion listener added');
+                                updateDebug('Shake your phone to use Death Blossom!');
+                            } else {
+                                updateDebug('Permission denied');
+                                updateDebug('Adding Death Blossom button...');
+                                addDeathBlossomButton();
+                            }
+                            return response;
+                        })
+                        .catch(error => {
+                            updateDebug('Error: ' + error.message);
+                            updateDebug('Adding Death Blossom button...');
+                            addDeathBlossomButton();
+                            return 'denied';
+                        });
+                } else {
+                    // Older browsers or Android
+                    updateDebug('Non-iOS, adding listener...');
+                    motionPermissionGranted = true;
+                    window.addEventListener('devicemotion', handleDeviceMotion, true);
+                    return Promise.resolve('granted');
+                }
+            }
+            
+            function addDeathBlossomButton() {
+                // Create Death Blossom button for mobile when shake detection fails
+                const dbButton = document.createElement('button');
+                dbButton.innerHTML = '💥 DEATH BLOSSOM';
+                dbButton.style.position = 'fixed';
+                dbButton.style.bottom = '20px';
+                dbButton.style.left = '50%';
+                dbButton.style.transform = 'translateX(-50%)';
+                dbButton.style.padding = '15px 25px';
+                dbButton.style.fontSize = '16px';
+                dbButton.style.fontWeight = 'bold';
+                dbButton.style.backgroundColor = '#ff0000';
+                dbButton.style.color = 'white';
+                dbButton.style.border = '2px solid #fff';
+                dbButton.style.borderRadius = '8px';
+                dbButton.style.zIndex = '10000';
+                dbButton.style.cursor = 'pointer';
+                dbButton.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+                dbButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+                
+                dbButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (GameState.deathBlossomAvailable && !GameState.deathBlossomActive && 
+                        !GameState.gameOver && !GameState.shipExploding) {
+                        activateDeathBlossom(GameState, Date.now());
+                        updateDebug('Death Blossom activated via button');
+                    }
+                });
+                
+                // Add double-tap to try shake detection (simpler than long press)
+                let lastTap = 0;
+                dbButton.addEventListener('click', (e) => {
+                    const currentTime = new Date().getTime();
+                    const timeSinceLastTap = currentTime - lastTap;
+                    
+                    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+                        // Double tap detected - try to enable shake detection
+                        if (!motionPermissionGranted && userHasInteracted && !motionPermissionRequested) {
+                            e.preventDefault();
+                            motionPermissionRequested = true;
+                            updateDebug('Double tap detected - requesting motion permission...');
+                            
+                            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                                DeviceMotionEvent.requestPermission()
+                                    .then(response => {
+                                        updateDebug('Permission: ' + response);
+                                        if (response === 'granted') {
+                                            motionPermissionGranted = true;
+                                            window.addEventListener('devicemotion', handleDeviceMotion, true);
+                                            updateDebug('Motion listener added - shake your phone!');
+                                        } else {
+                                            updateDebug('Permission denied via double tap');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        updateDebug('Double tap permission error: ' + error.message);
+                                    });
+                            } else {
+                                motionPermissionGranted = true;
+                                window.addEventListener('devicemotion', handleDeviceMotion, true);
+                                updateDebug('Motion detection enabled via double tap');
+                            }
+                        }
+                    }
+                    lastTap = currentTime;
+                });
+                
+                // Hide button when Death Blossom is not available
+                setInterval(() => {
+                    if (GameState.deathBlossomAvailable && !GameState.deathBlossomActive && 
+                        !GameState.gameOver && !GameState.shipExploding) {
+                        dbButton.style.display = 'block';
+                    } else {
+                        dbButton.style.display = 'none';
+                    }
+                }, 100);
+                
+                document.body.appendChild(dbButton);
+                updateDebug('Death Blossom button added');
+            }
+            
             // Show tutorial after a brief delay
             setTimeout(showMobileTutorial, 1000);
             
             canvas.addEventListener('touchstart', (e) => {
                 e.preventDefault();
+                
+                // Mark that user has interacted - we can now request motion permission later
+                if (!userHasInteracted) {
+                    userHasInteracted = true;
+                    updateDebug('User interaction detected');
+                    
+                    // Delay motion permission request to after the user has played a bit
+                    setTimeout(() => {
+                        if (GameState.deathBlossomAvailable && !motionPermissionRequested) {
+                            updateDebug('🎮 Want to shake your phone for Death Blossom?');
+                            updateDebug('Touch here to enable shake detection!');
+                            
+                            // Add a small prompt button for enabling shake
+                            const shakePrompt = document.createElement('button');
+                            shakePrompt.innerHTML = '📱 Enable Shake Detection';
+                            shakePrompt.style.position = 'fixed';
+                            shakePrompt.style.top = '50%';
+                            shakePrompt.style.left = '50%';
+                            shakePrompt.style.transform = 'translate(-50%, -50%)';
+                            shakePrompt.style.padding = '15px 25px';
+                            shakePrompt.style.fontSize = '16px';
+                            shakePrompt.style.backgroundColor = '#4CAF50';
+                            shakePrompt.style.color = 'white';
+                            shakePrompt.style.border = 'none';
+                            shakePrompt.style.borderRadius = '8px';
+                            shakePrompt.style.zIndex = '10001';
+                            shakePrompt.style.cursor = 'pointer';
+                            shakePrompt.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+                            
+                            shakePrompt.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                document.body.removeChild(shakePrompt);
+                                
+                                // Request permission directly in the click handler (iOS requirement)
+                                if (!motionPermissionRequested && window.DeviceMotionEvent) {
+                                    motionPermissionRequested = true;
+                                    updateDebug('Requesting motion permission...');
+                                    
+                                    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                                        // iOS 13+ requires permission request from click event
+                                        updateDebug('iOS 13+ detected');
+                                        DeviceMotionEvent.requestPermission()
+                                            .then(response => {
+                                                updateDebug('Permission: ' + response);
+                                                if (response === 'granted') {
+                                                    motionPermissionGranted = true;
+                                                    window.addEventListener('devicemotion', handleDeviceMotion, true);
+                                                    updateDebug('Motion listener added');
+                                                    updateDebug('Shake your phone to use Death Blossom!');
+                                                } else {
+                                                    updateDebug('Permission denied');
+                                                    updateDebug('Adding Death Blossom button...');
+                                                    addDeathBlossomButton();
+                                                }
+                                            })
+                                            .catch(error => {
+                                                updateDebug('Error: ' + error.message);
+                                                updateDebug('Adding Death Blossom button...');
+                                                addDeathBlossomButton();
+                                            });
+                                    } else {
+                                        // Older browsers or Android
+                                        updateDebug('Non-iOS, adding listener...');
+                                        motionPermissionGranted = true;
+                                        window.addEventListener('devicemotion', handleDeviceMotion, true);
+                                        updateDebug('Shake detection enabled!');
+                                    }
+                                }
+                            });
+                            
+                            document.body.appendChild(shakePrompt);
+                            
+                            // Auto-remove after 10 seconds if not used
+                            setTimeout(() => {
+                                if (document.body.contains(shakePrompt)) {
+                                    document.body.removeChild(shakePrompt);
+                                    updateDebug('Shake prompt expired - using button fallback');
+                                    if (!motionPermissionGranted) {
+                                        addDeathBlossomButton();
+                                    }
+                                }
+                            }, 10000);
+                        }
+                    }, 5000); // Wait 5 seconds after first interaction
+                }
                 
                 // Resume audio context on first touch (iOS Safari requirement)
                 if (GameState.sound && GameState.sound.resumeAudio) {
@@ -1216,6 +1490,69 @@
             ctx.restore();
         }
 
+        // Death Blossom pure functions
+        function shouldDeathBlossomFire(state, currentTime) {
+            if (!state.deathBlossomActive) return false;
+            
+            // Fire at 10x normal rate during Death Blossom (25ms vs 250ms)
+            const normalFireInterval = 250;
+            const deathBlossomFireInterval = normalFireInterval / 10;
+            
+            return (currentTime - state.lastFireTime) >= deathBlossomFireInterval;
+        }
+
+        function updateDeathBlossomState(state, deltaTime, currentTime, mathObj = Math) {
+            if (!state.deathBlossomActive) return state;
+
+            const rotationSpeed = 6; // 6 radians per second for fast rotation (3x faster)
+            const deathBlossomRotationCount = state.DEATH_BLOSSOM_ROTATION_COUNT || 9; // Number of full rotations (configurable)
+            const totalAngleToRotate = deathBlossomRotationCount * (2 * mathObj.PI);
+
+            // Auto-rotate ship continuously
+            const angleRotated = rotationSpeed * deltaTime;
+            state.ship.angle = state.ship.angle + angleRotated;
+            
+            // Track total angle rotated since Death Blossom started
+            if (!state.deathBlossomTotalAngleRotated) {
+                state.deathBlossomTotalAngleRotated = 0;
+            }
+            state.deathBlossomTotalAngleRotated += angleRotated;
+
+            // Calculate completed rotations based on total angle rotated
+            const completedRotations = mathObj.floor(state.deathBlossomTotalAngleRotated / (2 * mathObj.PI));
+            state.deathBlossomRotations = completedRotations;
+
+            // Check if Death Blossom should end (completed the required rotations)
+            if (state.deathBlossomTotalAngleRotated >= totalAngleToRotate) {
+                state.deathBlossomActive = false;
+                state.deathBlossomStartTime = 0;
+                state.deathBlossomRotations = 0;
+                state.deathBlossomTotalAngleRotated = 0;
+                // Restore original max bullets
+                state.MAX_BULLETS = 5;
+            }
+
+            return state;
+        }
+
+        function activateDeathBlossom(state, currentTime) {
+            // Only activate if available and not already active
+            if (!state.deathBlossomAvailable || state.deathBlossomActive) return state;
+            
+            state.deathBlossomActive = true;
+            state.deathBlossomStartTime = currentTime;
+            state.deathBlossomRotations = 0;
+            state.deathBlossomAvailable = false; // One use per ship life
+            
+            // Increase max bullets temporarily and play siren
+            state.MAX_BULLETS = 50;
+            if (state.sound && state.sound.playSiren) {
+                state.sound.playSiren();
+            }
+            
+            return state;
+        }
+
         // Game state update function
         function updateGameState(state, keysPressed, deltaTime, currentTime, mathObj = Math) {
             // Handle pause toggle on Escape key press (only on initial press, not while held)
@@ -1238,12 +1575,15 @@
             // Check for game over
             if (state.gameOver) return state;
 
+            // Update Death Blossom state first (this handles auto-rotation and timing)
+            const deathBlossomUpdatedState = updateDeathBlossomState(state, deltaTime, currentTime, mathObj);
+
             // Calculate scale factor once for this frame
             const scaleFactor = calculateScaleFactor();
 
             // Deep copy of state to avoid mutation (excluding non-serializable properties)
             const newState = {
-                ship: { ...state.ship },
+                ship: { ...deathBlossomUpdatedState.ship },
                 asteroids: state.asteroids.slice(), // Shallow copy to preserve getters
                 bullets: state.bullets.map(b => ({ ...b })),
                 particles: state.particles.map(p => ({ ...p })),
@@ -1263,12 +1603,19 @@
                 titleSplashVisible: state.titleSplashVisible,
                 titleSplashFrameCount: state.titleSplashFrameCount,
                 level: state.level,
+                // Death Blossom state (use updated state from Death Blossom function)
+                deathBlossomActive: deathBlossomUpdatedState.deathBlossomActive,
+                deathBlossomStartTime: deathBlossomUpdatedState.deathBlossomStartTime,
+                deathBlossomRotations: deathBlossomUpdatedState.deathBlossomRotations,
+                deathBlossomTotalAngleRotated: deathBlossomUpdatedState.deathBlossomTotalAngleRotated,
+                deathBlossomAvailable: deathBlossomUpdatedState.deathBlossomAvailable,
                 // Copy game constants needed for asteroid spawning
                 SHIP_ACCELERATION: state.SHIP_ACCELERATION,
                 ROTATION_SPEED: state.ROTATION_SPEED,
                 BULLET_SPEED: state.BULLET_SPEED,
-                MAX_BULLETS: state.MAX_BULLETS,
-                ASTEROID_SPAWN_COUNT: state.ASTEROID_SPAWN_COUNT
+                MAX_BULLETS: deathBlossomUpdatedState.MAX_BULLETS, // May be modified by Death Blossom
+                ASTEROID_SPAWN_COUNT: state.ASTEROID_SPAWN_COUNT,
+                DEATH_BLOSSOM_ROTATION_COUNT: state.DEATH_BLOSSOM_ROTATION_COUNT
             };
 
             // Check if ship explosion should end
@@ -1294,6 +1641,9 @@
                     newState.ship.vy = 0;
                     newState.ship.angle = -Math.PI / 2;
                     
+                    // Reset Death Blossom availability for new ship life
+                    newState.deathBlossomAvailable = true;
+                    
                     // Trigger neon title splash on ship respawn
                     newState.titleSplashVisible = true;
                     newState.titleSplashFrameCount = 0;
@@ -1302,29 +1652,39 @@
 
             // Update ship based on input (only if not exploding)
             if (!newState.shipExploding) {
-                // Handle rotation (keyboard only - mobile sets angle directly)
-                if (keysPressed['ArrowLeft']) {
-                    newState.ship.angle -= state.ROTATION_SPEED * deltaTime;
+                // Handle rotation - Death Blossom overrides manual controls
+                if (!newState.deathBlossomActive) {
+                    // Normal rotation controls (keyboard only - mobile sets angle directly)
+                    if (keysPressed['ArrowLeft']) {
+                        newState.ship.angle -= state.ROTATION_SPEED * deltaTime;
+                    }
+
+                    if (keysPressed['ArrowRight']) {
+                        newState.ship.angle += state.ROTATION_SPEED * deltaTime;
+                    }
                 }
+                // If Death Blossom is active, ship.angle is already set by updateDeathBlossomState
 
-                if (keysPressed['ArrowRight']) {
-                    newState.ship.angle += state.ROTATION_SPEED * deltaTime;
-                }
+                // Handle thrust - Death Blossom overrides manual controls
+                if (!newState.deathBlossomActive) {
+                    // Normal thrust controls (keyboard or mobile)
+                    if (keysPressed['ArrowUp'] || isThrusting) {
+                        newState.ship.thrusting = true;
 
-                // Handle thrust (keyboard or mobile)
-                if (keysPressed['ArrowUp'] || isThrusting) {
-                    newState.ship.thrusting = true;
+                        // Apply thrust in direction ship is pointing
+                        const acceleration = state.SHIP_ACCELERATION * deltaTime;
+                        newState.ship.vx += Math.cos(newState.ship.angle) * acceleration;
+                        newState.ship.vy += Math.sin(newState.ship.angle) * acceleration;
 
-                    // Apply thrust in direction ship is pointing
-                    const acceleration = state.SHIP_ACCELERATION * deltaTime;
-                    newState.ship.vx += Math.cos(newState.ship.angle) * acceleration;
-                    newState.ship.vy += Math.sin(newState.ship.angle) * acceleration;
-
-                    // Play thrust sound occasionally to avoid spam
-                    if (mathObj.random() < 0.1) {
-                        newState.sound.playThrust();
+                        // Play thrust sound occasionally to avoid spam
+                        if (mathObj.random() < 0.1) {
+                            newState.sound.playThrust();
+                        }
+                    } else {
+                        newState.ship.thrusting = false;
                     }
                 } else {
+                    // During Death Blossom, no manual thrust control
                     newState.ship.thrusting = false;
                 }
 
@@ -1340,13 +1700,20 @@
                 else if (newState.ship.y > GAME_HEIGHT) newState.ship.y = 0;
 
                 // Fire bullets (with rate limiting)
-                const fireDelay = 250; // milliseconds between shots
-
-                // Fire when space is pressed OR auto-fire is enabled OR (on mobile) finger is on rotary controller
-                const isMobileRotaryFiring = typeof isRotaryTouching !== 'undefined' && isRotaryTouching;
-                const shouldFire = (keysPressed[' '] || (state.autoFire && !isMobileRotaryFiring) || isMobileRotaryFiring) && 
-                    newState.bullets.length < state.MAX_BULLETS &&
-                    (currentTime - state.lastFireTime) > fireDelay;
+                let shouldFire;
+                
+                if (newState.deathBlossomActive) {
+                    // Death Blossom mode: auto-fire at 10x rate, ignore manual controls
+                    shouldFire = shouldDeathBlossomFire(newState, currentTime) && 
+                        newState.bullets.length < newState.MAX_BULLETS;
+                } else {
+                    // Normal firing logic
+                    const fireDelay = 250; // milliseconds between shots
+                    const isMobileRotaryFiring = typeof isRotaryTouching !== 'undefined' && isRotaryTouching;
+                    shouldFire = (keysPressed[' '] || (state.autoFire && !isMobileRotaryFiring) || isMobileRotaryFiring) && 
+                        newState.bullets.length < newState.MAX_BULLETS &&
+                        (currentTime - newState.lastFireTime) > fireDelay;
+                }
 
                 if (shouldFire) {
                     const bullet = {
@@ -1497,6 +1864,15 @@
                         // Lose a life (only if not in kid mode)
                         if (!newState.kidMode) {
                             newState.lives--;
+                        }
+
+                        // Stop Death Blossom if it was active (ship death ends Death Blossom)
+                        if (newState.deathBlossomActive) {
+                            newState.deathBlossomActive = false;
+                            newState.deathBlossomStartTime = 0;
+                            newState.deathBlossomRotations = 0;
+                            newState.deathBlossomTotalAngleRotated = 0;
+                            newState.MAX_BULLETS = 5; // Restore normal bullet count
                         }
 
                         // Don't end game immediately if lives reach 0 - wait for explosion to complete
@@ -1775,6 +2151,14 @@
             GameState.level = newState.level;
             GameState.titleSplashStartTime = newState.titleSplashStartTime;
             GameState.titleSplashElapsed = newState.titleSplashElapsed;
+            
+            // Update Death Blossom state (this was missing!)
+            GameState.deathBlossomActive = newState.deathBlossomActive;
+            GameState.deathBlossomStartTime = newState.deathBlossomStartTime;
+            GameState.deathBlossomRotations = newState.deathBlossomRotations;
+            GameState.deathBlossomTotalAngleRotated = newState.deathBlossomTotalAngleRotated;
+            GameState.deathBlossomAvailable = newState.deathBlossomAvailable;
+            GameState.MAX_BULLETS = newState.MAX_BULLETS; // Death Blossom can change this
             render(GameState);
 
             requestAnimationFrame(gameLoop);
@@ -1814,6 +2198,7 @@
             GameState.deathBlossomActive = false;
             GameState.deathBlossomStartTime = 0;
             GameState.deathBlossomRotations = 0;
+            GameState.deathBlossomTotalAngleRotated = 0;
             GameState.deathBlossomAvailable = true;
             
             // Show title splash on game start
@@ -3179,6 +3564,665 @@
                         if (initialState.level !== 1) {
                             throw new Error(`Expected initial level 1, got ${initialState.level}`);
                         }
+                    });
+                });
+
+                describe('Death Blossom Feature', function() {
+                    let testState;
+
+                    beforeEach(function() {
+                        testState = {
+                            ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                            bullets: [],
+                            deathBlossomActive: false,
+                            deathBlossomStartTime: 0,
+                            deathBlossomRotations: 0,
+                            deathBlossomTotalAngleRotated: 0,
+                            deathBlossomAvailable: true,
+                            lastFireTime: 0,
+                            MAX_BULLETS: 5,
+                            sound: { playSiren: function() { this.sirenCalls = (this.sirenCalls || 0) + 1; } },
+                            gameOver: false,
+                            shipExploding: false
+                        };
+                    });
+
+                    describe('activateDeathBlossom', function() {
+                        it('should activate Death Blossom when available', function() {
+                            const currentTime = 1000;
+                            const result = activateDeathBlossom(testState, currentTime);
+                            
+                            if (!result.deathBlossomActive) {
+                                throw new Error('Death Blossom should be active after activation');
+                            }
+                            if (result.deathBlossomStartTime !== currentTime) {
+                                throw new Error(`Expected start time ${currentTime}, got ${result.deathBlossomStartTime}`);
+                            }
+                            if (result.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should not be available after activation');
+                            }
+                            if (result.MAX_BULLETS !== 50) {
+                                throw new Error(`Expected MAX_BULLETS 50, got ${result.MAX_BULLETS}`);
+                            }
+                        });
+
+                        it('should not activate if already active', function() {
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomAvailable = false;
+                            
+                            const result = activateDeathBlossom(testState, 1000);
+                            
+                            if (result !== testState) {
+                                throw new Error('Should return same state when already active');
+                            }
+                        });
+
+                        it('should not activate if not available', function() {
+                            testState.deathBlossomAvailable = false;
+                            
+                            const result = activateDeathBlossom(testState, 1000);
+                            
+                            if (result !== testState) {
+                                throw new Error('Should return same state when not available');
+                            }
+                        });
+
+                        it('should play siren sound on activation', function() {
+                            const currentTime = 1000;
+                            activateDeathBlossom(testState, currentTime);
+                            
+                            if (!testState.sound.sirenCalls || testState.sound.sirenCalls !== 1) {
+                                throw new Error('Should play siren sound exactly once');
+                            }
+                        });
+                    });
+
+                    describe('updateDeathBlossomState', function() {
+                        beforeEach(function() {
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomStartTime = 1000;
+                            testState.ship.angle = 0;
+                        });
+
+                        it('should return same state when Death Blossom not active', function() {
+                            testState.deathBlossomActive = false;
+                            
+                            const result = updateDeathBlossomState(testState, 0.016, 1100);
+                            
+                            if (result !== testState) {
+                                throw new Error('Should return same state when not active');
+                            }
+                        });
+
+                        it('should rotate ship continuously during Death Blossom', function() {
+                            // Set up test state manually to be sure
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomStartTime = 1000;
+                            testState.ship.angle = 0;
+                            
+                            const deltaTime = 0.5; // Half second
+                            const currentTime = 1000; // Same as start time
+                            const initialAngle = testState.ship.angle;
+                            
+                            updateDeathBlossomState(testState, deltaTime, currentTime);
+                            
+                            const expectedAngleChange = 6 * deltaTime; // 6 radians per second (3x faster)
+                            const actualAngleChange = testState.ship.angle - initialAngle;
+                            
+                            if (Math.abs(actualAngleChange - expectedAngleChange) > 0.001) {
+                                throw new Error(`Expected angle change ${expectedAngleChange}, got ${actualAngleChange}. State active: ${testState.deathBlossomActive}, Start time: ${testState.deathBlossomStartTime}, Current time: ${currentTime}`);
+                            }
+                        });
+
+                        it('should track rotation count correctly', function() {
+                            // Set up test state manually
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomStartTime = 1000;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            
+                            // Simulate one full rotation (2π radians)
+                            const oneFullRotation = 2 * Math.PI;
+                            const deltaTime = oneFullRotation / 6; // At 6 rad/s, this will rotate exactly 2π
+                            updateDeathBlossomState(testState, deltaTime, 1000);
+                            
+                            if (testState.deathBlossomRotations !== 1) {
+                                throw new Error(`Expected 1 rotation, got ${testState.deathBlossomRotations}`);
+                            }
+                            if (Math.abs(testState.deathBlossomTotalAngleRotated - oneFullRotation) > 0.001) {
+                                throw new Error(`Expected total angle ${oneFullRotation}, got ${testState.deathBlossomTotalAngleRotated}`);
+                            }
+                        });
+
+                        it('should end Death Blossom after 9 rotations', function() {
+                            // Set up test state manually  
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomStartTime = 1000;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                            
+                            // Simulate exactly 9 full rotations (9 * 2π radians)
+                            const nineFullRotations = 9 * 2 * Math.PI;
+                            const deltaTime = nineFullRotations / 6; // At 6 rad/s, this will rotate exactly 18π
+                            updateDeathBlossomState(testState, deltaTime, 1000);
+                            
+                            if (testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should end after 9 rotations');
+                            }
+                            if (testState.deathBlossomStartTime !== 0) {
+                                throw new Error('Start time should be reset to 0');
+                            }
+                            if (testState.deathBlossomRotations !== 0) {
+                                throw new Error('Rotation count should be reset to 0');
+                            }
+                            if (testState.deathBlossomTotalAngleRotated !== 0) {
+                                throw new Error('Total angle rotated should be reset to 0');
+                            }
+                        });
+
+                        it('should restore original MAX_BULLETS when ending', function() {
+                            // Set up test state manually
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomStartTime = 1000;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            testState.MAX_BULLETS = 50; // Set during Death Blossom
+                            testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                            
+                            // Simulate exactly 9 full rotations to end Death Blossom
+                            const nineFullRotations = 9 * 2 * Math.PI;
+                            const deltaTime = nineFullRotations / 6; // At 6 rad/s
+                            updateDeathBlossomState(testState, deltaTime, 1000);
+                            
+                            if (testState.MAX_BULLETS !== 5) {
+                                throw new Error(`Expected MAX_BULLETS restored to 5, got ${testState.MAX_BULLETS}`);
+                            }
+                        });
+                    });
+
+                    describe('shouldDeathBlossomFire', function() {
+                        it('should return false when Death Blossom not active', function() {
+                            testState.deathBlossomActive = false;
+                            
+                            const result = shouldDeathBlossomFire(testState, 1000);
+                            
+                            if (result) {
+                                throw new Error('Should not fire when Death Blossom not active');
+                            }
+                        });
+
+                        it('should fire at 10x rate during Death Blossom', function() {
+                            testState.deathBlossomActive = true;
+                            testState.lastFireTime = 1000;
+                            
+                            // Normal fire interval is 250ms, Death Blossom is 25ms
+                            const shouldFireAt1025 = shouldDeathBlossomFire(testState, 1025);
+                            const shouldFireAt1024 = shouldDeathBlossomFire(testState, 1024);
+                            
+                            if (!shouldFireAt1025) {
+                                throw new Error('Should fire after 25ms interval');
+                            }
+                            if (shouldFireAt1024) {
+                                throw new Error('Should not fire before 25ms interval');
+                            }
+                        });
+                    });
+
+                    describe('detectShakeThreshold', function() {
+                        it('should detect shake when acceleration exceeds threshold', function() {
+                            const strongAcceleration = { x: 15, y: 15, z: 15 }; // magnitude ~26.0 > 25
+                            
+                            if (!detectShakeThreshold(strongAcceleration)) {
+                                throw new Error('Should detect shake with strong acceleration');
+                            }
+                        });
+
+                        it('should not detect shake when acceleration below threshold', function() {
+                            const weakAcceleration = { x: 1, y: 1, z: 1 }; // magnitude ~1.7 < 25
+                            
+                            if (detectShakeThreshold(weakAcceleration)) {
+                                throw new Error('Should not detect shake with weak acceleration');
+                            }
+                        });
+
+                        it('should calculate magnitude correctly', function() {
+                            const acceleration = { x: 3, y: 4, z: 0 }; // magnitude = 5
+                            const threshold = 6;
+                            const oldThreshold = shakeThreshold;
+                            shakeThreshold = threshold;
+                            
+                            const result = detectShakeThreshold(acceleration);
+                            shakeThreshold = oldThreshold; // restore
+                            
+                            if (result) {
+                                throw new Error('Should not detect shake when magnitude < threshold');
+                            }
+                        });
+                    });
+
+                    describe('Incremental Rotation Testing', function() {
+                        it('should track multiple partial rotations correctly', function() {
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            
+                            // First half rotation
+                            updateDeathBlossomState(testState, Math.PI / 6, 1000); // π/6 seconds at 6 rad/s = π radians
+                            if (testState.deathBlossomRotations !== 0) {
+                                throw new Error(`Expected 0 rotations after π radians, got ${testState.deathBlossomRotations}`);
+                            }
+                            
+                            // Complete first rotation
+                            updateDeathBlossomState(testState, Math.PI / 6, 1000); // Another π radians = 2π total
+                            if (testState.deathBlossomRotations !== 1) {
+                                throw new Error(`Expected 1 rotation after 2π radians, got ${testState.deathBlossomRotations}`);
+                            }
+                            
+                            // Add 1.5 more rotations (total 2.5)
+                            updateDeathBlossomState(testState, Math.PI / 2, 1000); // π/2 seconds at 6 rad/s = 3π radians, 5π total
+                            if (testState.deathBlossomRotations !== 2) {
+                                throw new Error(`Expected 2 rotations after 5π radians, got ${testState.deathBlossomRotations}`);
+                            }
+                            
+                            // Should still be active (not yet 3 full rotations)
+                            if (!testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should still be active after 2.5 rotations');
+                            }
+                        });
+
+                        it('should end precisely after 9 full rotations', function() {
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                            
+                            // Do 8.9 rotations (should still be active)
+                            const almostNineRotations = 8.9 * 2 * Math.PI;
+                            updateDeathBlossomState(testState, almostNineRotations / 6, 1000);
+                            
+                            if (!testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should still be active at 8.9 rotations');
+                            }
+                            
+                            // Add just enough to reach exactly 9 rotations
+                            const remainingAngle = (9 * 2 * Math.PI) - almostNineRotations;
+                            updateDeathBlossomState(testState, remainingAngle / 6, 1000);
+                            
+                            if (testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should end at exactly 9 rotations');
+                            }
+                        });
+
+                        it('should respect configurable rotation count', function() {
+                            testState.deathBlossomActive = true;
+                            testState.deathBlossomTotalAngleRotated = 0;
+                            testState.DEATH_BLOSSOM_ROTATION_COUNT = 5; // Configure for 5 rotations instead of 9
+                            
+                            // Do exactly 3 rotations (should still be active with 5-rotation config)
+                            const threeRotations = 3 * 2 * Math.PI;
+                            updateDeathBlossomState(testState, threeRotations / 6, 1000);
+                            
+                            if (!testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should still be active after 3 rotations when configured for 5');
+                            }
+                            
+                            // Do exactly 5 rotations total (should end)
+                            const twoMoreRotations = 2 * 2 * Math.PI;
+                            updateDeathBlossomState(testState, twoMoreRotations / 6, 1000);
+                            
+                            if (testState.deathBlossomActive) {
+                                throw new Error('Death Blossom should end after 5 rotations when configured for 5');
+                            }
+                        });
+                    });
+
+                    describe('Game State Integration', function() {
+                        it('should override ship rotation during Death Blossom', function() {
+                            const currentTime = 1000; // Use same time as start time to avoid timing issues
+                            const deltaTime = 0.5; // Use larger deltaTime for clearer results
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: true,
+                                deathBlossomStartTime: currentTime,
+                                deathBlossomRotations: 0,
+                                deathBlossomAvailable: false,
+                                MAX_BULLETS: 50,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 3,
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4
+                            };
+                            
+                            const keysPressed = { 'ArrowLeft': true }; // Try to rotate left
+                            const initialAngle = initialState.ship.angle; // Should be 0
+                            
+                            const result = updateGameState(initialState, keysPressed, deltaTime, currentTime);
+                            
+                            // Death Blossom should override manual rotation
+                            // Ship should rotate right due to Death Blossom, not left from key press
+                            const expectedRotation = 2 * deltaTime; // 2 rad/s * deltaTime = 1 radian
+                            const actualRotation = result.ship.angle - initialAngle;
+                            
+                            if (actualRotation <= 0) {
+                                throw new Error(`Ship should rotate right during Death Blossom, ignoring left arrow key. Expected ${expectedRotation}, got ${actualRotation}. Result Death Blossom active: ${result.deathBlossomActive}`);
+                            }
+                        });
+
+                        it('should fire at high rate during Death Blossom regardless of key presses', function() {
+                            const currentTime = 1000; // Use same time as start time to avoid duration issues
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: true,
+                                deathBlossomStartTime: currentTime,
+                                deathBlossomRotations: 0,
+                                deathBlossomAvailable: false,
+                                MAX_BULLETS: 50,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                lastFireTime: currentTime - 30, // Fire time 30ms ago, should be ready to fire
+                                autoFire: false,
+                                lives: 3,
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4
+                            };
+                            
+                            const keysPressed = {}; // No keys pressed
+                            const result = updateGameState(initialState, keysPressed, 0.016, currentTime);
+                            
+                            if (result.bullets.length !== 1) {
+                                throw new Error(`Should fire bullet during Death Blossom even without spacebar press. Bullets: ${result.bullets.length}, Death Blossom active: ${result.deathBlossomActive}, lastFireTime: ${result.lastFireTime}, currentTime: ${currentTime}`);
+                            }
+                        });
+
+                        it('should maintain Death Blossom availability correctly', function() {
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: false,
+                                deathBlossomStartTime: 0,
+                                deathBlossomRotations: 0,
+                                deathBlossomAvailable: true,
+                                MAX_BULLETS: 5,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 3,
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4
+                            };
+                            
+                            if (!initialState.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should be available initially');
+                            }
+                            
+                            // Activate Death Blossom
+                            activateDeathBlossom(initialState, 1000);
+                            
+                            if (initialState.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should not be available after activation');
+                            }
+                        });
+
+                        it('should reset Death Blossom availability on ship respawn - comprehensive test', function() {
+                            // Test the full cycle: use Death Blossom -> die -> respawn -> should be available again
+                            let state = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: false,
+                                deathBlossomStartTime: 0,
+                                deathBlossomRotations: 0,
+                                deathBlossomTotalAngleRotated: 0,
+                                deathBlossomAvailable: true, // Initially available
+                                MAX_BULLETS: 5,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                shipExplosionStartTime: 0,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 3,
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4,
+                                DEATH_BLOSSOM_ROTATION_COUNT: 3
+                            };
+                            
+                            // Step 1: Use Death Blossom (should make it unavailable)
+                            state = activateDeathBlossom(state, 1000);
+                            if (state.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should not be available after activation');
+                            }
+                            
+                            // Step 2: Simulate ship getting killed (set exploding, decrement lives)
+                            state.shipExploding = true;
+                            state.shipExplosionStartTime = 2000;
+                            state.lives--; // Lose a life
+                            state.deathBlossomActive = false; // Death Blossom ends when ship dies
+                            
+                            // Step 3: Simulate explosion ending and ship respawn
+                            const respawnTime = 2000 + 2100; // 2.1 seconds after explosion
+                            const result = updateGameState(state, {}, 0.016, respawnTime);
+                            
+                            // Step 4: Verify Death Blossom is available again
+                            if (!result.deathBlossomAvailable) {
+                                throw new Error(`Death Blossom should be available after respawn. Lives: ${result.lives}, Exploding: ${result.shipExploding}, Available: ${result.deathBlossomAvailable}`);
+                            }
+                            
+                            // Verify ship respawned properly
+                            if (result.shipExploding) {
+                                throw new Error('Ship should not be exploding after respawn');
+                            }
+                            if (result.lives !== 2) {
+                                throw new Error(`Expected 2 lives after losing one, got ${result.lives}`);
+                            }
+                        });
+
+                        it('should stop Death Blossom and reset availability when ship dies during Death Blossom', function() {
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0, radius: 10 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [{ x: 400, y: 300, radius: 20, vx: 0, vy: 0 }], // Asteroid at same position as ship
+                                shipDebris: [],
+                                deathBlossomActive: true, // Death Blossom is active when ship dies
+                                deathBlossomStartTime: 1000,
+                                deathBlossomRotations: 1,
+                                deathBlossomTotalAngleRotated: Math.PI * 2, // 1 full rotation
+                                deathBlossomAvailable: false, // Was used
+                                MAX_BULLETS: 50, // Death Blossom max bullets
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                shipExplosionStartTime: 0,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 2, // Has remaining lives
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                kidMode: false,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4,
+                                DEATH_BLOSSOM_ROTATION_COUNT: 3
+                            };
+                            
+                            // Ship collides with asteroid - should stop Death Blossom and start explosion
+                            const collisionTime = 2000;
+                            const afterCollision = updateGameState(initialState, {}, 0.016, collisionTime);
+                            
+                            // Death Blossom should be stopped by collision
+                            if (afterCollision.deathBlossomActive) {
+                                throw new Error('Death Blossom should be stopped when ship dies');
+                            }
+                            if (afterCollision.MAX_BULLETS !== 5) {
+                                throw new Error(`MAX_BULLETS should be restored to 5, got ${afterCollision.MAX_BULLETS}`);
+                            }
+                            if (!afterCollision.shipExploding) {
+                                throw new Error('Ship should be exploding after collision');
+                            }
+                            if (afterCollision.lives !== 1) {
+                                throw new Error(`Expected 1 life after collision, got ${afterCollision.lives}`);
+                            }
+                            
+                            // After explosion ends, ship should respawn with Death Blossom available
+                            const respawnTime = collisionTime + 2100; // 2.1 seconds after explosion start
+                            const afterRespawn = updateGameState(afterCollision, {}, 0.016, respawnTime);
+                            
+                            if (!afterRespawn.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should be available again after respawn');
+                            }
+                            if (afterRespawn.shipExploding) {
+                                throw new Error('Ship should not be exploding after respawn');
+                            }
+                        });
+
+                        it('should reset Death Blossom availability on ship respawn', function() {
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0 },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: false,
+                                deathBlossomStartTime: 0,
+                                deathBlossomRotations: 0,
+                                deathBlossomTotalAngleRotated: 0,
+                                deathBlossomAvailable: false, // Death Blossom was used on previous life
+                                MAX_BULLETS: 5,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: true, // Ship is exploding
+                                shipExplosionStartTime: 1000,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 2, // Has remaining lives
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4,
+                                DEATH_BLOSSOM_ROTATION_COUNT: 3
+                            };
+                            
+                            // Simulate ship explosion ending after 2 seconds, which should respawn ship
+                            const currentTime = 1000 + 2100; // 2.1 seconds after explosion start
+                            const result = updateGameState(initialState, {}, 0.016, currentTime);
+                            
+                            // After ship respawn, Death Blossom should be available again
+                            if (!result.deathBlossomAvailable) {
+                                throw new Error('Death Blossom should be available again after ship respawn');
+                            }
+                            
+                            // Ship should be respawned (not exploding)
+                            if (result.shipExploding) {
+                                throw new Error('Ship should have respawned and not be exploding');
+                            }
+                            
+                            // Ship should be at center position
+                            const expectedX = 512; // GAME_WIDTH / 2 (1024/2)
+                            const expectedY = 384; // GAME_HEIGHT / 2 (768/2)
+                            if (Math.abs(result.ship.x - expectedX) > 1 || Math.abs(result.ship.y - expectedY) > 1) {
+                                throw new Error(`Ship should respawn at center (${expectedX}, ${expectedY}), got (${result.ship.x}, ${result.ship.y})`);
+                            }
+                        });
+
+                        it('should disable thrust control during Death Blossom', function() {
+                            const currentTime = 1000;
+                            const initialState = {
+                                ship: { x: 400, y: 300, angle: 0, vx: 0, vy: 0, thrusting: false },
+                                bullets: [],
+                                particles: [],
+                                asteroids: [],
+                                shipDebris: [],
+                                deathBlossomActive: true,
+                                deathBlossomStartTime: currentTime,
+                                deathBlossomRotations: 0,
+                                deathBlossomTotalAngleRotated: 0,
+                                deathBlossomAvailable: false,
+                                MAX_BULLETS: 50,
+                                gameOver: false,
+                                paused: false,
+                                shipExploding: false,
+                                lastFireTime: 0,
+                                autoFire: false,
+                                lives: 3,
+                                score: 0,
+                                sound: new MockSoundInterface(),
+                                titleSplashVisible: false,
+                                titleSplashFrameCount: 0,
+                                level: 1,
+                                SHIP_ACCELERATION: 500,
+                                ROTATION_SPEED: 5,
+                                BULLET_SPEED: 600,
+                                ASTEROID_SPAWN_COUNT: 4
+                            };
+                            
+                            const keysPressed = { 'ArrowUp': true }; // Try to thrust
+                            const initialVelocity = { vx: initialState.ship.vx, vy: initialState.ship.vy };
+                            const result = updateGameState(initialState, keysPressed, 0.016, currentTime);
+                            
+                            // Death Blossom should prevent thrust
+                            if (result.ship.thrusting) {
+                                throw new Error('Ship should not be thrusting during Death Blossom');
+                            }
+                            
+                            // Velocity should not have changed due to thrust (but ship position might change due to existing velocity)
+                            if (result.ship.vx !== initialVelocity.vx || result.ship.vy !== initialVelocity.vy) {
+                                throw new Error(`Ship velocity should not change during Death Blossom. Expected vx:${initialVelocity.vx}, vy:${initialVelocity.vy}, got vx:${result.ship.vx}, vy:${result.ship.vy}`);
+                            }
+                        });
                     });
                 });
 
