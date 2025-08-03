@@ -575,7 +575,7 @@
             get SHIP_ACCELERATION() { return scale(300); },
             ROTATION_SPEED: 5, // radians per second (angular, no scaling needed)
             get BULLET_SPEED() { return scale(500); },
-            MAX_BULLETS: 4,
+            MAX_BULLETS: 5,
             ASTEROID_SPAWN_COUNT: 5,
 
             // Sound system (will be injected based on test/production mode)
@@ -1282,7 +1282,7 @@
                 else if (newState.ship.y > GAME_HEIGHT) newState.ship.y = 0;
 
                 // Fire bullets (with rate limiting)
-                const fireDelay = 200; // milliseconds between shots
+                const fireDelay = 250; // milliseconds between shots
 
                 // Fire when space is pressed OR auto-fire is enabled OR (on mobile) finger is on rotary controller
                 const isMobileRotaryFiring = typeof isRotaryTouching !== 'undefined' && isRotaryTouching;
