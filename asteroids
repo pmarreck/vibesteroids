@@ -9,14 +9,14 @@ GAME_PATH="${SCRIPT_DIR}/src/asteroids.html"
 
 # Detect OS and open the game in the default browser
 if command -v xdg-open >/dev/null 2>&1; then
-    # Linux and other Unix-like systems with xdg-open
-    xdg-open "$GAME_PATH"
+	# Linux and other Unix-like systems with xdg-open
+	xdg-open "$GAME_PATH"
 elif command -v open >/dev/null 2>&1; then
-    # macOS
-    open "$GAME_PATH"
+	# macOS
+	open "$GAME_PATH"
 else
-    # Fallback for other systems
-    echo "Error: Could not find a way to open the game. Please open this file in a web browser:"
-    echo "$GAME_PATH"
-    exit 1
+	# Fallback for other systems
+	echo "Error: Could not find a way to open the game. Please open this file in a web browser:"
+	echo "$GAME_PATH"
+	exit 1
 fi

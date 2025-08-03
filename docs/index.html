@@ -4,30 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asteroids Game</title>
+    <!-- Mobile debugging console -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
     <style>
         body {
             margin: 0;
             padding: 0;
             background-color: #000;
             color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
             height: 100vh;
+            width: 100vw;
+            overflow: hidden;
             font-family: 'Courier New', monospace;
+            position: relative;
+        }
+        
+        /* Hide cursor when user is actively playing */
+        body.playing {
+            cursor: none;
         }
 
         canvas {
-            border: 1px solid #fff;
+            display: block;
             background-color: #111;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         .game-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
             display: flex;
             justify-content: space-between;
-            width: var(--game-width, 800px);
-            margin-bottom: 10px;
+            z-index: 10;
+            pointer-events: none;
         }
 
         .game-over {
@@ -108,7 +122,46 @@
 <body>
     <div class="game-info">
         <div>Score: <span id="scoreValue">0</span></div>
-        <div>Lives: <span id="livesValue">3</span></div>
+        <div><span id="livesValue">🚀🚀🚀</span></div>
+        <div id="debugInfo" style="font-size: 10px; color: yellow; position: absolute; top: 60px; left: 10px; z-index: 1000; display: none;"></div>
+    </div>
+    
+    <!-- Invisible debug touch areas -->
+    <div id="debugToggleArea" style="position: absolute; top: 0; left: 0; width: 12.5vw; height: 12.5vw; z-index: 2000; cursor: pointer;"></div>
+    <div id="testModeToggleArea" style="position: absolute; top: 0; right: 0; width: 12.5vw; height: 12.5vw; z-index: 2000; cursor: pointer;"></div>
+    
+    <!-- Mobile tutorial overlay -->
+    <div id="mobileTutorial" style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        display: none;
+        z-index: 3000;
+        font-family: 'Courier New', monospace;
+        padding: 20px;
+        box-sizing: border-box;
+        text-align: center;
+    ">
+        <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+        ">
+            <h2 style="color: #00ff00; margin-bottom: 30px;">🚀 Mobile Controls</h2>
+            <div style="font-size: 18px; line-height: 1.6; margin-bottom: 30px;">
+                <p><strong>Left Edge:</strong> Touch & drag vertically to rotate ship</p>
+                <p><strong>Anywhere Else:</strong> Tap or hold to thrust</p>
+                <p><strong>Auto-Fire:</strong> Bullets fire automatically</p>
+                <p style="color: #ffaa00;"><strong>🔊 Turn off silent mode</strong> to hear sound effects</p>
+            </div>
+            <p style="font-size: 14px; color: #888;">Tap anywhere to dismiss (auto-dismiss in <span id="tutorialCountdown">10</span>s)</p>
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -127,6 +180,7 @@
             <p>← → : Rotate ship</p>
             <p>↑ : Thrust</p>
             <p>Space : Fire bullets</p>
+            <p>Shift-F : Toggle endless fire mode</p>
             <p>ESC : Pause/Resume</p>
             <p>shift-T : Test mode (press browser Back button to return to game)</p>
             <p>shift-K : Toggle "kid mode" (infinite lives, no scoring)</p>
@@ -143,46 +197,110 @@
         // Add test mode toggle with capital T
         let testModeTriggered = false;
 
-        // Node.js compatibility shims
+        // Use jsdom for Node.js testing to provide real DOM environment
         if (isNodeJS) {
-            global.document = {
-                getElementById: () => ({
-                    style: {
-                        setProperty: () => {},
-                        display: ''
-                    },
-                    textContent: ''
-                }),
-                querySelector: () => ({ style: {} }),
-                createElement: () => ({ id: '', appendChild: () => {} }),
-                body: {
-                    appendChild: () => {},
-                    style: {}
-                }
-            };
-            global.window = {
-                ...global,
-                addEventListener: () => {},
-                AudioContext: null,
-                webkitAudioContext: null,
-                location: { search: '?test' }
-            };
-            global.requestAnimationFrame = () => {};
+            try {
+                const { JSDOM } = require('jsdom');
+                
+                // Create a jsdom instance with proper HTML structure
+                const dom = new JSDOM(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Asteroids Test</title></head>
+                    <body>
+                        <canvas id="gameCanvas" width="1024" height="768"></canvas>
+                        <div class="game-info">
+                            <span id="scoreValue">0</span>
+                            <span id="livesValue">🚀🚀🚀</span>
+                        </div>
+                        <div id="gameOverScreen" style="display: none;">
+                            <span id="finalScore">0</span>
+                        </div>
+                        <div id="pauseScreen" style="display: none;"></div>
+                    </body>
+                    </html>
+                `, {
+                    url: 'http://localhost?test',
+                    pretendToBeVisual: true,
+                    resources: 'usable'
+                });
+                
+                // Set up global objects from jsdom
+                global.window = dom.window;
+                global.document = dom.window.document;
+                global.navigator = dom.window.navigator;
+                global.requestAnimationFrame = (callback) => setTimeout(callback, 16);
+                
+                // Set window dimensions for scaling
+                Object.defineProperty(global.window, 'innerWidth', {
+                    writable: true,
+                    configurable: true,
+                    value: 1024
+                });
+                Object.defineProperty(global.window, 'innerHeight', {
+                    writable: true,
+                    configurable: true,
+                    value: 768
+                });
+                
+            } catch (error) {
+                console.warn('jsdom not available, falling back to basic mocks:', error.message);
+                // Fallback to basic mocks if jsdom fails
+                global.window = {
+                    innerWidth: 1024,
+                    innerHeight: 768,
+                    addEventListener: () => {},
+                    location: { search: '?test' }
+                };
+                global.document = {
+                    getElementById: () => ({ style: {}, textContent: '' }),
+                    querySelector: () => ({ style: {} }),
+                    createElement: () => ({ style: {} }),
+                    body: { style: {} },
+                    documentElement: { style: { setProperty: () => {} } }
+                };
+                global.requestAnimationFrame = () => {};
+            }
         }
 
         // Sound Interface Classes
         class RealSoundInterface {
             constructor() {
+                this.audioContext = null;
+                this.initialized = false;
+                this.initAudio();
+            }
+            
+            initAudio() {
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // iOS Safari requires user interaction before audio can play
+                    if (this.audioContext.state === 'suspended') {
+                        // Will be resumed on first user interaction
+                        this.initialized = false;
+                    } else {
+                        this.initialized = true;
+                    }
                 } catch (e) {
                     // AudioContext not available (e.g., in Node.js or some browsers)
                     this.audioContext = null;
+                    this.initialized = false;
+                }
+            }
+            
+            resumeAudio() {
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().then(() => {
+                        this.initialized = true;
+                    });
+                } else if (this.audioContext) {
+                    this.initialized = true;
                 }
             }
 
             playShoot() {
                 if (!this.audioContext) return;
+                if (!this.initialized) return;
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
 
@@ -364,8 +482,61 @@
         }
 
         // Game configuration constants
-        const GAME_WIDTH = 1024;
-        const GAME_HEIGHT = 768;
+        const BASE_WIDTH = 1024;
+        const BASE_HEIGHT = 768;
+        const BASE_DIAGONAL = Math.sqrt(BASE_WIDTH * BASE_WIDTH + BASE_HEIGHT * BASE_HEIGHT);
+        
+        // Dynamic game dimensions (will be updated based on viewport)
+        let GAME_WIDTH = BASE_WIDTH;
+        let GAME_HEIGHT = BASE_HEIGHT;
+        let SCALE_FACTOR = 1.0;
+        
+        // Calculate scale factor based on viewport diagonal (pure function with dependency injection)
+        function calculateScaleFactor(windowObj = (typeof window !== 'undefined' ? window : null)) {
+            // In test environment or when no window object, use baseline scale factor
+            if (!windowObj) {
+                return 1.0;
+            }
+            const viewportWidth = windowObj.innerWidth;
+            const viewportHeight = windowObj.innerHeight;
+            const viewportDiagonal = Math.sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+            return viewportDiagonal / BASE_DIAGONAL;
+        }
+        
+        // Update game dimensions based on viewport (pure function with dependency injection)
+        function updateGameDimensions(windowObj = (typeof window !== 'undefined' ? window : null), documentObj = (typeof document !== 'undefined' ? document : null)) {
+            let gameWidth, gameHeight;
+            
+            // In test environment or when no window object, use baseline dimensions
+            if (!windowObj) {
+                gameWidth = BASE_WIDTH;
+                gameHeight = BASE_HEIGHT;
+            } else {
+                gameWidth = windowObj.innerWidth;
+                gameHeight = windowObj.innerHeight;
+            }
+            
+            // Update global variables (for legacy compatibility)
+            GAME_WIDTH = gameWidth;
+            GAME_HEIGHT = gameHeight;
+            SCALE_FACTOR = calculateScaleFactor(windowObj); // Keep for any legacy references
+            
+            // Update canvas size if document is available
+            if (documentObj) {
+                const canvas = documentObj.getElementById('gameCanvas');
+                if (canvas) {
+                    canvas.width = gameWidth;
+                    canvas.height = gameHeight;
+                }
+            }
+            
+            return { width: gameWidth, height: gameHeight };
+        }
+        
+        // Helper function to scale values based on current scale factor (pure function with dependency injection)
+        function scale(value, windowObj = (typeof window !== 'undefined' ? window : null)) {
+            return value * calculateScaleFactor(windowObj);
+        }
 
         // Game state structure
         const GameState = {
@@ -375,7 +546,7 @@
                 vx: 0,
                 vy: 0,
                 angle: -Math.PI / 2, // Start pointing up
-                radius: 10,
+                get radius() { return scale(10); },
                 thrusting: false
             },
 
@@ -391,12 +562,13 @@
             shipExploding: false,
             shipExplosionStartTime: 0,
             lastFireTime: 0,
+            escapeKeyWasPressed: false,
             kidMode: false,
 
-            // Game constants
-            SHIP_ACCELERATION: 300,
-            ROTATION_SPEED: 5, // radians per second
-            BULLET_SPEED: 500,
+            // Game constants (scaled dynamically)
+            get SHIP_ACCELERATION() { return scale(300); },
+            ROTATION_SPEED: 5, // radians per second (angular, no scaling needed)
+            get BULLET_SPEED() { return scale(500); },
             MAX_BULLETS: 4,
             ASTEROID_SPAWN_COUNT: 5,
 
@@ -406,13 +578,25 @@
 
         // Input handler
         const keysPressed = {};
+        let cursorTimeout = null;
 
         window.addEventListener('keydown', (e) => {
             keysPressed[e.key] = true;
 
-            // Handle pause toggle
+            // Hide cursor when user starts typing game controls
+            const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'f', 'F'];
+            if (gameKeys.includes(e.key)) {
+                document.body.classList.add('playing');
+                
+                // Clear existing timeout and set new one to show cursor after inactivity
+                if (cursorTimeout) clearTimeout(cursorTimeout);
+                cursorTimeout = setTimeout(() => {
+                    document.body.classList.remove('playing');
+                }, 3000); // Show cursor after 3 seconds of inactivity
+            }
+
+            // Escape key will be handled in updateGameState
             if (e.key === 'Escape') {
-                GameState.paused = !GameState.paused;
                 e.preventDefault();
             }
 
@@ -431,6 +615,12 @@
                 e.preventDefault();
             }
 
+            // Handle auto-fire toggle with F or Shift-F
+            if (e.key === 'F' || e.key === 'f') {
+                GameState.autoFire = !GameState.autoFire;
+                e.preventDefault();
+            }
+
             // Prevent arrow key scrolling
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 e.preventDefault();
@@ -441,22 +631,235 @@
             keysPressed[e.key] = false;
         });
 
-        // Renderer
-        function render(state) {
-            const canvas = document.getElementById('gameCanvas');
-            const ctx = canvas.getContext('2d');
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateGameDimensions();
+        });
 
-            // Set canvas dimensions if not already set
-            if (canvas.width !== GAME_WIDTH || canvas.height !== GAME_HEIGHT) {
-                canvas.width = GAME_WIDTH;
-                canvas.height = GAME_HEIGHT;
-                // Update CSS variable for game info width
-                document.documentElement.style.setProperty('--game-width', GAME_WIDTH + 'px');
+        // Initialize game dimensions on load
+        updateGameDimensions();
+        
+        // Interactive debug toggles
+        let debugInfoVisible = false;
+        
+        // Top-left corner: toggle debug info
+        document.getElementById('debugToggleArea').addEventListener('click', (e) => {
+            e.preventDefault();
+            debugInfoVisible = !debugInfoVisible;
+            const debugElement = document.getElementById('debugInfo');
+            if (debugElement) {
+                debugElement.style.display = debugInfoVisible ? 'block' : 'none';
             }
+        });
+        
+        // Top-right corner: toggle test mode
+        document.getElementById('testModeToggleArea').addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!testModeTriggered && !isNodeJS) {
+                testModeTriggered = true;
+                // Reload page with test parameter
+                window.location.href = window.location.pathname + '?test';
+            }
+        });
+
+        // Mobile touch controls
+        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        let touchStartY = null;
+        let touchStartX = null;
+        let isThrusting = false;
+        
+        // Get canvas reference for mobile touch events
+        const canvas = document.getElementById('gameCanvas');
+        
+        // Mobile tutorial system
+        let tutorialDismissed = false;
+        let tutorialTimeout = null;
+        let countdownInterval = null;
+        
+        function showMobileTutorial() {
+            if (!isMobile || tutorialDismissed) return;
+            
+            const tutorial = document.getElementById('mobileTutorial');
+            const countdown = document.getElementById('tutorialCountdown');
+            if (!tutorial || !countdown) return;
+            
+            // Pause the game while tutorial is showing
+            GameState.paused = true;
+            
+            tutorial.style.display = 'block';
+            
+            let timeLeft = 10;
+            countdown.textContent = timeLeft;
+            
+            // Update countdown every second
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                countdown.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    dismissTutorial();
+                }
+            }, 1000);
+            
+            // Auto-dismiss after 10 seconds
+            tutorialTimeout = setTimeout(dismissTutorial, 10000);
+            
+            // Tap to dismiss
+            tutorial.addEventListener('click', dismissTutorial);
+        }
+        
+        function dismissTutorial() {
+            tutorialDismissed = true;
+            
+            // Resume the game when tutorial is dismissed
+            GameState.paused = false;
+            
+            const tutorial = document.getElementById('mobileTutorial');
+            if (tutorial) {
+                tutorial.style.display = 'none';
+            }
+            if (tutorialTimeout) {
+                clearTimeout(tutorialTimeout);
+                tutorialTimeout = null;
+            }
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+        
+        // Mobile touch event handlers
+        if (isMobile && canvas) {
+            // Enable auto-fire on mobile
+            GameState.autoFire = true;
+            
+            // Show tutorial after a brief delay
+            setTimeout(showMobileTutorial, 1000);
+            
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                
+                // Resume audio context on first touch (iOS Safari requirement)
+                if (GameState.sound && GameState.sound.resumeAudio) {
+                    GameState.sound.resumeAudio();
+                    // Also try to play a silent sound to fully unlock audio on iOS
+                    setTimeout(() => {
+                        if (GameState.sound.audioContext && GameState.sound.audioContext.state === 'running') {
+                            const oscillator = GameState.sound.audioContext.createOscillator();
+                            const gainNode = GameState.sound.audioContext.createGain();
+                            gainNode.gain.setValueAtTime(0, GameState.sound.audioContext.currentTime);
+                            oscillator.connect(gainNode);
+                            gainNode.connect(GameState.sound.audioContext.destination);
+                            oscillator.start();
+                            oscillator.stop(GameState.sound.audioContext.currentTime + 0.01);
+                        }
+                    }, 100);
+                }
+                
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                touchStartX = x;
+                touchStartY = y;
+                
+                // Left edge (20% of screen width) for rotation
+                if (x < GAME_WIDTH * 0.2) {
+                    // Apply linear position-to-angle mapping immediately
+                    const normalizedY = y / GAME_HEIGHT; // 0 to 1
+                    const angleRange = 4 * Math.PI; // 2 full rotations
+                    const centerAngle = -Math.PI / 2; // Pointing up
+                    
+                    // Map: 0 (top) -> -2.5π, 0.5 (center) -> -π/2, 1 (bottom) -> 1.5π
+                    const targetAngle = centerAngle + (normalizedY - 0.5) * angleRange;
+                    
+                    // Set ship angle directly
+                    GameState.ship.angle = targetAngle;
+                } else {
+                    // Anywhere else for thrust
+                    isThrusting = true;
+                }
+            });
+            
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                // Handle rotation on left edge - linear position to angle mapping
+                if (touchStartX < GAME_WIDTH * 0.2) {
+                    // Map vertical position to ship angle
+                    // Center of screen = pointing up (-π/2)
+                    // Top to bottom = 2 full rotations (4π range)
+                    const normalizedY = y / GAME_HEIGHT; // 0 to 1
+                    const angleRange = 4 * Math.PI; // 2 full rotations
+                    const centerAngle = -Math.PI / 2; // Pointing up
+                    
+                    // Map: 0 (top) -> -2.5π, 0.5 (center) -> -π/2, 1 (bottom) -> 1.5π
+                    const targetAngle = centerAngle + (normalizedY - 0.5) * angleRange;
+                    
+                    // Set ship angle directly (no rotation direction needed)
+                    GameState.ship.angle = targetAngle;
+                }
+            });
+            
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                touchStartX = null;
+                touchStartY = null;
+                isThrusting = false;
+            });
+            
+            canvas.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                touchStartX = null;
+                touchStartY = null;
+                isThrusting = false;
+            });
+        }
+
+        // Renderer (pure function with dependency injection)
+        function render(state, documentObj = (typeof document !== 'undefined' ? document : null), windowObj = (typeof window !== 'undefined' ? window : null)) {
+            if (!documentObj) return; // Can't render without document
+            
+            const canvas = documentObj.getElementById('gameCanvas');
+            if (!canvas) {
+                console.error('Canvas element not found!');
+                return; // Can't render without canvas
+            }
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error('Failed to get 2D context from canvas!');
+                return; // Can't render without context
+            }
+
+            // Update game dimensions on every frame to handle viewport changes
+            updateGameDimensions(windowObj, documentObj);
+
+            // Update CSS variable for game info width
+            document.documentElement.style.setProperty('--game-width', GAME_WIDTH + 'px');
 
             // Clear canvas
             ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Debug info for mobile debugging (only when visible)
+            const debugElement = documentObj.getElementById('debugInfo');
+            if (debugElement && debugElement.style.display !== 'none' && Math.random() < 0.1) { // Update occasionally when visible
+                debugElement.innerHTML = `
+                    Canvas: ${canvas.width}x${canvas.height}<br>
+                    Game: ${GAME_WIDTH}x${GAME_HEIGHT}<br>
+                    Ship: ${state.ship.x.toFixed(0)},${state.ship.y.toFixed(0)}<br>
+                    Asteroids: ${state.asteroids.length}<br>
+                    Bullets: ${state.bullets.length}<br>
+                    Scale: ${calculateScaleFactor().toFixed(2)}
+                `;
+            }
+            
+
 
             // Draw stars background
             ctx.fillStyle = '#fff';
@@ -482,7 +885,7 @@
             ctx.fillStyle = '#0f0';
             state.bullets.forEach(bullet => {
                 ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, 2, 0, Math.PI * 2);
+                ctx.arc(bullet.x, bullet.y, scale(2), 0, Math.PI * 2);
                 ctx.fill();
             });
 
@@ -495,7 +898,7 @@
             state.particles.forEach(particle => {
                 ctx.fillStyle = `rgba(255, ${150 - particle.life}, 0, ${particle.life / 40})`;
                 ctx.beginPath();
-                ctx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
+                ctx.arc(particle.x, particle.y, scale(2), 0, Math.PI * 2);
                 ctx.fill();
             });
 
@@ -504,21 +907,39 @@
                 drawShipDebris(ctx, debris);
             });
 
-            // Update UI (hide score and lives in kid mode)
-            const scoreElement = document.getElementById('scoreValue');
-            const livesElement = document.getElementById('livesValue');
-            const gameInfoElement = document.querySelector('.game-info');
+            // Update UI elements with dependency injection
+            const scoreElement = documentObj.getElementById('scoreValue');
+            const livesElement = documentObj.getElementById('livesValue');
+            const gameInfoElement = documentObj.querySelector('.game-info');
 
-            if (state.kidMode) {
+            if (state.kidMode && gameInfoElement) {
                 gameInfoElement.style.visibility = 'hidden';
-            } else {
+            } else if (gameInfoElement) {
                 gameInfoElement.style.visibility = 'visible';
-                scoreElement.textContent = state.score;
-                livesElement.textContent = state.lives;
+                if (scoreElement) scoreElement.textContent = state.score;
+                if (livesElement) {
+                    // Display lives as ship emojis
+                    const shipEmoji = '🚀';
+                    livesElement.textContent = shipEmoji.repeat(Math.max(0, state.lives));
+                }
+            }
+
+            // Show/hide game over screen
+            const gameOverScreen = documentObj.getElementById('gameOverScreen');
+            if (gameOverScreen) {
+                gameOverScreen.style.display = state.gameOver ? 'block' : 'none';
             }
 
             // Show/hide pause screen
-            document.getElementById('pauseScreen').style.display = state.paused ? 'block' : 'none';
+            const pauseScreen = documentObj.getElementById('pauseScreen');
+            if (pauseScreen) {
+                if (state.paused) {
+                    console.log('Game paused - showing pause screen');
+                    pauseScreen.style.display = 'block';
+                } else {
+                    pauseScreen.style.display = 'none';
+                }
+            }
         }
 
         function drawShip(ctx, ship) {
@@ -528,14 +949,14 @@
 
             // Draw ship
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = scale(2);
             ctx.beginPath();
 
             // Ship body
-            ctx.moveTo(15, 0);
-            ctx.lineTo(-10, -8);
-            ctx.lineTo(-5, 0);
-            ctx.lineTo(-10, 8);
+            ctx.moveTo(scale(15), 0);
+            ctx.lineTo(scale(-10), scale(-8));
+            ctx.lineTo(scale(-5), 0);
+            ctx.lineTo(scale(-10), scale(8));
             ctx.closePath();
             ctx.stroke();
 
@@ -543,9 +964,9 @@
             if (ship.thrusting) {
                 ctx.strokeStyle = '#ff8800'; // Orange color
                 ctx.beginPath();
-                ctx.moveTo(-5, -3);
-                ctx.lineTo(-15 * Math.random() - 10, 0);
-                ctx.lineTo(-5, 3);
+                ctx.moveTo(scale(-5), scale(-3));
+                ctx.lineTo(scale(-15 * Math.random() - 10), 0);
+                ctx.lineTo(scale(-5), scale(3));
                 ctx.stroke();
                 ctx.strokeStyle = '#fff'; // Reset to white for ship outline
             }
@@ -553,7 +974,7 @@
             // Ship center
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(0, 0, 3, 0, Math.PI * 2);
+            ctx.arc(0, 0, scale(3), 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
@@ -565,7 +986,7 @@
             ctx.rotate(asteroid.angle);
 
             ctx.strokeStyle = '#888';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = scale(2);
             ctx.beginPath();
 
             const points = asteroid.points;
@@ -603,7 +1024,7 @@
             // Fade out as life decreases
             const alpha = Math.max(0, debris.life / 120);
             ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = scale(2);
             ctx.beginPath();
 
             const points = debris.points;
@@ -624,15 +1045,36 @@
 
         // Game state update function
         function updateGameState(state, keysPressed, deltaTime, currentTime) {
-            if (state.gameOver || state.paused) return state;
+            // Handle pause toggle on Escape key press (only on initial press, not while held)
+            if (keysPressed['Escape'] && !state.escapeKeyWasPressed) {
+                return {
+                    ...state,
+                    paused: !state.paused,
+                    escapeKeyWasPressed: true
+                };
+            }
+            
+            // If paused, return current state without updates (but track key release)
+            if (state.paused) {
+                return {
+                    ...state,
+                    escapeKeyWasPressed: keysPressed['Escape'] || false
+                };
+            }
+            
+            // Check for game over
+            if (state.gameOver) return state;
+
+            // Calculate scale factor once for this frame
+            const scaleFactor = calculateScaleFactor();
 
             // Deep copy of state to avoid mutation (excluding non-serializable properties)
             const newState = {
                 ship: { ...state.ship },
-                asteroids: state.asteroids.map(a => ({ ...a, points: [...a.points] })),
+                asteroids: state.asteroids.slice(), // Shallow copy to preserve getters
                 bullets: state.bullets.map(b => ({ ...b })),
                 particles: state.particles.map(p => ({ ...p })),
-                shipDebris: state.shipDebris.map(d => ({ ...d, points: [...d.points] })),
+                shipDebris: state.shipDebris.slice(), // Shallow copy to preserve getters
                 score: state.score,
                 lives: state.lives,
                 gameOver: state.gameOver,
@@ -640,6 +1082,8 @@
                 shipExploding: state.shipExploding,
                 shipExplosionStartTime: state.shipExplosionStartTime,
                 lastFireTime: state.lastFireTime,
+                autoFire: state.autoFire,
+                escapeKeyWasPressed: keysPressed['Escape'] || false,
                 kidMode: state.kidMode,
                 stars: state.stars,
                 sound: state.sound // Pass through the sound interface
@@ -655,8 +1099,10 @@
                 if (newState.lives <= 0) {
                     newState.gameOver = true;
                     if (typeof document !== 'undefined') {
-                        document.getElementById('finalScore').textContent = newState.score;
-                        document.getElementById('gameOverScreen').style.display = 'block';
+                        const finalScoreElement = document.getElementById('finalScore');
+                        const gameOverScreen = document.getElementById('gameOverScreen');
+                        if (finalScoreElement) finalScoreElement.textContent = newState.score;
+                        if (gameOverScreen) gameOverScreen.style.display = 'block';
                     }
                 } else {
                     // Respawn ship
@@ -670,6 +1116,7 @@
 
             // Update ship based on input (only if not exploding)
             if (!newState.shipExploding) {
+                // Handle rotation (keyboard only - mobile sets angle directly)
                 if (keysPressed['ArrowLeft']) {
                     newState.ship.angle -= state.ROTATION_SPEED * deltaTime;
                 }
@@ -678,7 +1125,8 @@
                     newState.ship.angle += state.ROTATION_SPEED * deltaTime;
                 }
 
-                if (keysPressed['ArrowUp']) {
+                // Handle thrust (keyboard or mobile)
+                if (keysPressed['ArrowUp'] || isThrusting) {
                     newState.ship.thrusting = true;
 
                     // Apply thrust in direction ship is pointing
@@ -694,9 +1142,9 @@
                     newState.ship.thrusting = false;
                 }
 
-                // Update ship position
-                newState.ship.x += newState.ship.vx * deltaTime;
-                newState.ship.y += newState.ship.vy * deltaTime;
+                // Update ship position (scale velocity with scale factor)
+                newState.ship.x += newState.ship.vx * scaleFactor * deltaTime;
+                newState.ship.y += newState.ship.vy * scaleFactor * deltaTime;
 
                 // Screen wrapping
                 if (newState.ship.x < 0) newState.ship.x = GAME_WIDTH;
@@ -708,11 +1156,15 @@
                 // Fire bullets (with rate limiting)
                 const fireDelay = 200; // milliseconds between shots
 
-                if (keysPressed[' '] && newState.bullets.length < state.MAX_BULLETS &&
-                    (currentTime - state.lastFireTime) > fireDelay) {
+                // Fire when space is pressed OR auto-fire is enabled
+                const shouldFire = (keysPressed[' '] || state.autoFire) && 
+                    newState.bullets.length < state.MAX_BULLETS &&
+                    (currentTime - state.lastFireTime) > fireDelay;
+
+                if (shouldFire) {
                     const bullet = {
-                        x: newState.ship.x + Math.cos(newState.ship.angle) * 20,
-                        y: newState.ship.y + Math.sin(newState.ship.angle) * 20,
+                        x: newState.ship.x + Math.cos(newState.ship.angle) * scale(20),
+                        y: newState.ship.y + Math.sin(newState.ship.angle) * scale(20),
                         vx: newState.ship.vx + Math.cos(newState.ship.angle) * state.BULLET_SPEED,
                         vy: newState.ship.vy + Math.sin(newState.ship.angle) * state.BULLET_SPEED,
                         distanceTraveled: 0
@@ -729,8 +1181,8 @@
                 const oldX = bullet.x;
                 const oldY = bullet.y;
 
-                bullet.x += bullet.vx * deltaTime;
-                bullet.y += bullet.vy * deltaTime;
+                bullet.x += bullet.vx * scaleFactor * deltaTime;
+                bullet.y += bullet.vy * scaleFactor * deltaTime;
 
                 // Track distance traveled
                 const dx = bullet.x - oldX;
@@ -751,8 +1203,8 @@
 
             // Update particles
             newState.particles = newState.particles.filter(particle => {
-                particle.x += particle.vx * deltaTime;
-                particle.y += particle.vy * deltaTime;
+                particle.x += particle.vx * scaleFactor * deltaTime;
+                particle.y += particle.vy * scaleFactor * deltaTime;
 
                 // Apply gravity to particles
                 particle.vx *= 0.98;
@@ -763,8 +1215,8 @@
 
             // Update ship debris
             newState.shipDebris = newState.shipDebris.filter(debris => {
-                debris.x += debris.vx * deltaTime;
-                debris.y += debris.vy * deltaTime;
+                debris.x += debris.vx * scaleFactor * deltaTime;
+                debris.y += debris.vy * scaleFactor * deltaTime;
                 debris.angle += debris.angularVelocity * deltaTime;
 
                 // Apply drag
@@ -783,8 +1235,8 @@
 
             // Update asteroids
             newState.asteroids.forEach(asteroid => {
-                asteroid.x += asteroid.vx * deltaTime;
-                asteroid.y += asteroid.vy * deltaTime;
+                asteroid.x += asteroid.vx * scaleFactor * deltaTime;
+                asteroid.y += asteroid.vy * scaleFactor * deltaTime;
                 asteroid.angle += asteroid.angularVelocity * deltaTime;
 
                 // Screen wrapping
@@ -952,8 +1404,8 @@
         }
 
         function createAsteroid(x, y) {
-            const size = 20 + Math.random() * 30;
-            const points = [];
+            const baseSize = 20 + Math.random() * 30; // Store base size for scaling
+            const basePoints = [];
             const segments = 8 + Math.floor(Math.random() * 4); // Moderate segment count
 
             for (let i = 0; i < segments; i++) {
@@ -963,9 +1415,9 @@
                 const angle = baseAngle + angleJitter;
 
                 // Moderate radius variation for natural jaggedness
-                const radiusVariation = size * (0.6 + Math.random() * 0.5); // Range from 0.6x to 1.1x size
+                const radiusVariation = baseSize * (0.6 + Math.random() * 0.5); // Range from 0.6x to 1.1x size
 
-                points.push([
+                basePoints.push([
                     Math.cos(angle) * radiusVariation,
                     Math.sin(angle) * radiusVariation
                 ]);
@@ -974,18 +1426,18 @@
             // Add fewer, more subtle spikes
             const spikeCount = Math.floor(Math.random() * 2); // 0-1 extra spikes
             for (let spike = 0; spike < spikeCount; spike++) {
-                const insertIndex = Math.floor(Math.random() * points.length);
-                const prevPoint = points[insertIndex];
-                const nextPoint = points[(insertIndex + 1) % points.length];
+                const insertIndex = Math.floor(Math.random() * basePoints.length);
+                const prevPoint = basePoints[insertIndex];
+                const nextPoint = basePoints[(insertIndex + 1) % basePoints.length];
 
                 // Create a more subtle spike between two existing points
                 const midAngle = Math.atan2(
                     (prevPoint[1] + nextPoint[1]) / 2,
                     (prevPoint[0] + nextPoint[0]) / 2
                 );
-                const spikeRadius = size * (0.5 + Math.random() * 0.3); // Less extreme spikes
+                const spikeRadius = baseSize * (0.5 + Math.random() * 0.3); // Less extreme spikes
 
-                points.splice(insertIndex + 1, 0, [
+                basePoints.splice(insertIndex + 1, 0, [
                     Math.cos(midAngle) * spikeRadius,
                     Math.sin(midAngle) * spikeRadius
                 ]);
@@ -1000,8 +1452,15 @@
                 y: y,
                 vx: ensureMinimumVelocity(initialVx),
                 vy: ensureMinimumVelocity(initialVy),
-                radius: size,
-                points: points,
+                baseRadius: baseSize, // Store base radius for scaling
+                get radius() { return scale(this.baseRadius); }, // Dynamic scaling
+                basePoints: basePoints, // Store base points for scaling
+                get points() { // Dynamic scaling of points
+                    return this.basePoints.map(point => [
+                        scale(point[0]),
+                        scale(point[1])
+                    ]);
+                },
                 angle: 0,
                 angularVelocity: (Math.random() - 0.5) * 2 // radians per second
             };
@@ -1038,9 +1497,9 @@
             // Create explosion particles
             createExplosion(gameState, asteroid.x, asteroid.y);
 
-            // Break up asteroid if it's large enough
-            if (asteroid.radius > 20) {
-                const newRadius = asteroid.radius * 0.6;
+            // Break up asteroid if it's large enough (using base radius for comparison)
+            if (asteroid.baseRadius > 20) {
+                const newBaseRadius = asteroid.baseRadius * 0.6;
 
                 for (let k = 0; k < 2; k++) {
                     const smallAsteroid = createAsteroid(
@@ -1048,19 +1507,19 @@
                         asteroid.y + (Math.random() - 0.5) * 40
                     );
 
-                    // Rescale the points from the randomly generated size to the desired smaller size
-                    const originalGeneratedRadius = smallAsteroid.radius;
-                    const scaleFactor = newRadius / originalGeneratedRadius;
+                    // Rescale the base points from the randomly generated size to the desired smaller size
+                    const originalGeneratedBaseRadius = smallAsteroid.baseRadius;
+                    const scaleFactor = newBaseRadius / originalGeneratedBaseRadius;
 
-                    smallAsteroid.radius = newRadius;
-                    smallAsteroid.points = smallAsteroid.points.map(point => [
+                    smallAsteroid.baseRadius = newBaseRadius;
+                    smallAsteroid.basePoints = smallAsteroid.basePoints.map(point => [
                         point[0] * scaleFactor,
                         point[1] * scaleFactor
                     ]);
 
                     // Velocity inversely proportional to size: smaller asteroids move faster
                     const baseSpeed = 120;
-                    const sizeMultiplier = 40 / smallAsteroid.radius;
+                    const sizeMultiplier = 40 / smallAsteroid.baseRadius;
                     const velocityBoost = baseSpeed * sizeMultiplier;
 
                     smallAsteroid.vx = ensureMinimumVelocity(asteroid.vx + (Math.random() - 0.5) * velocityBoost);
@@ -1081,7 +1540,24 @@
             lastTime = currentTime;
 
             const newState = updateGameState(GameState, keysPressed, deltaTime, currentTime);
-            Object.assign(GameState, newState);
+            
+            // Safely update only the mutable properties (avoid getter-only properties)
+            GameState.ship = newState.ship;
+            GameState.asteroids = newState.asteroids;
+            GameState.bullets = newState.bullets;
+            GameState.particles = newState.particles;
+            GameState.shipDebris = newState.shipDebris;
+            GameState.score = newState.score;
+            GameState.lives = newState.lives;
+            GameState.gameOver = newState.gameOver;
+            GameState.paused = newState.paused;
+            GameState.shipExploding = newState.shipExploding;
+            GameState.shipExplosionStartTime = newState.shipExplosionStartTime;
+            GameState.lastFireTime = newState.lastFireTime;
+            GameState.autoFire = newState.autoFire;
+            GameState.escapeKeyWasPressed = newState.escapeKeyWasPressed;
+            GameState.kidMode = newState.kidMode;
+            GameState.stars = newState.stars;
             render(GameState);
 
             requestAnimationFrame(gameLoop);
@@ -1089,7 +1565,8 @@
 
         // Game initialization
         function restartGame() {
-            document.getElementById('gameOverScreen').style.display = 'none';
+            const gameOverScreen = document.getElementById('gameOverScreen');
+            if (gameOverScreen) gameOverScreen.style.display = 'none';
 
             // Initialize sound system
             GameState.sound = new RealSoundInterface();
@@ -1113,6 +1590,12 @@
             GameState.shipExploding = false;
             GameState.shipExplosionStartTime = 0;
             GameState.lastFireTime = 0;
+            GameState.autoFire = false;
+            
+            // Enable auto-fire on mobile devices
+            if (isMobile) {
+                GameState.autoFire = true;
+            }
 
             // Spawn initial asteroids
             spawnAsteroids(GameState, 5);
@@ -1121,15 +1604,32 @@
         // Test Suite
         if (isTestMode) {
             // Setup simple test framework for both Node.js and browser
+            let testFailures = 0;
+            let testTotal = 0;
+            
+            // ANSI color codes for terminal output (available in both environments)
+            const colors = {
+                green: '\x1b[32m',
+                red: '\x1b[31m',
+                reset: '\x1b[0m',
+                bold: '\x1b[1m'
+            };
+            
             if (isNodeJS) {
                 console.log('Running Asteroids Game Tests in Node.js\n');
-                global.describe = (name, fn) => { console.log(`${name}:`); fn(); };
+                
+                global.describe = (name, fn) => {
+                    console.log(name);
+                    fn();
+                };
                 global.it = (name, fn) => {
+                    testTotal++;
                     try {
                         fn();
-                        console.log(`  ✓ ${name}`);
+                        console.log(`  ${colors.green}✓${colors.reset} ${name}`);
                     } catch(e) {
-                        console.log(`  ✗ ${name}: ${e.message}`);
+                        testFailures++;
+                        console.log(`  ${colors.red}✗${colors.reset} ${name}: ${colors.red}${e.message}${colors.reset}`);
                     }
                 };
                 global.beforeEach = (fn) => fn();
@@ -1157,32 +1657,43 @@
                         testElement.innerHTML = `<span class="test-pass">✓</span> ${name}`;
                         console.log(`  ✓ ${name}`);
                     } catch(e) {
+                        testFailures++;
                         testElement.innerHTML = `<span class="test-fail">✗</span> <span class="test-fail-message">${name}: ${e.message}</span>`;
                         console.log(`  ✗ ${name}: ${e.message}`);
+                        console.error('Full error details:', e);
                     }
 
+                    testTotal++;
                     testOutput.appendChild(testElement);
                 };
                 window.beforeEach = (fn) => fn();
             }
 
             // Hide the game canvas and show test results
-            document.getElementById('gameCanvas').style.display = 'none';
-            document.querySelector('.game-info').style.display = 'none';
+            const gameCanvas = document.getElementById('gameCanvas');
+            const gameInfo = document.querySelector('.game-info');
+            if (gameCanvas) gameCanvas.style.display = 'none';
+            if (gameInfo) gameInfo.style.display = 'none';
 
             // Force hide game over screen with !important override
             const gameOverScreen = document.getElementById('gameOverScreen');
-            gameOverScreen.style.setProperty('display', 'none', 'important');
-            gameOverScreen.style.setProperty('visibility', 'hidden', 'important');
+            if (gameOverScreen) {
+                gameOverScreen.style.setProperty('display', 'none', 'important');
+                gameOverScreen.style.setProperty('visibility', 'hidden', 'important');
+            }
 
             // Force hide pause screen as well
             const pauseScreen = document.getElementById('pauseScreen');
-            pauseScreen.style.setProperty('display', 'none', 'important');
-            pauseScreen.style.setProperty('visibility', 'hidden', 'important');
+            if (pauseScreen) {
+                pauseScreen.style.setProperty('display', 'none', 'important');
+                pauseScreen.style.setProperty('visibility', 'hidden', 'important');
+            }
 
             // Also hide the game elements by setting body style to prevent any game UI from showing
-            document.body.style.backgroundColor = '#fff';
-            document.body.style.color = '#000';
+            if (document.body) {
+                document.body.style.backgroundColor = '#fff';
+                document.body.style.color = '#000';
+            }
 
 
             // Test Suite Implementation
@@ -1220,11 +1731,19 @@
                 describe('Asteroid Creation', function() {
                     it('should create asteroid with correct properties', function() {
                         const asteroid = createAsteroid(100, 200);
+                        const scaleFactor = calculateScaleFactor();
 
                         if (asteroid.x !== 100) throw new Error(`Expected x=100, got ${asteroid.x}`);
                         if (asteroid.y !== 200) throw new Error(`Expected y=200, got ${asteroid.y}`);
-                        if (asteroid.radius < 20 || asteroid.radius > 50) {
-                            throw new Error(`Expected radius between 20-50, got ${asteroid.radius}`);
+                        
+                        // Check base radius (unscaled) and scaled radius
+                        if (asteroid.baseRadius < 20 || asteroid.baseRadius > 50) {
+                            throw new Error(`Expected base radius between 20-50, got ${asteroid.baseRadius}`);
+                        }
+                        const expectedMinRadius = 20 * scaleFactor;
+                        const expectedMaxRadius = 50 * scaleFactor;
+                        if (asteroid.radius < expectedMinRadius || asteroid.radius > expectedMaxRadius) {
+                            throw new Error(`Expected scaled radius between ${expectedMinRadius}-${expectedMaxRadius}, got ${asteroid.radius}`);
                         }
                         if (!Array.isArray(asteroid.points)) {
                             throw new Error('Expected points to be an array');
@@ -1335,6 +1854,7 @@
                             shipDebris: [],
                             score: 0, lives: 3, gameOver: false, paused: false,
                             shipExploding: false, shipExplosionStartTime: 0, lastFireTime: 0,
+                            autoFire: false, escapeKeyWasPressed: false,
                             SHIP_ACCELERATION: 300, ROTATION_SPEED: 5,
                             BULLET_SPEED: 500, MAX_BULLETS: 4, ASTEROID_SPAWN_COUNT: 5,
                             sound: new MockSoundInterface()
@@ -1385,6 +1905,7 @@
                     });
 
                     it('should create bullet when spacebar is pressed', function() {
+                        testState.lastFireTime = 0; // Reset to allow firing
                         const keys = { ' ': true };
                         const deltaTime = 0.1;
                         const currentTime = 1000;
@@ -1408,6 +1929,7 @@
                         testState.ship.angle = -Math.PI / 2;
                         testState.ship.vx = 10;
                         testState.ship.vy = 5;
+                        testState.lastFireTime = 0; // Reset to allow firing
 
                         const keys = { ' ': true };
                         const deltaTime = 0.1;
@@ -1457,10 +1979,78 @@
                         const keys = { ' ': true };
                         const deltaTime = 0.1;
                         const currentTime = 1100; // Only 100ms later, less than 200ms fire delay
-                        const newState = updateGameState(testState, keys, deltaTime, currentTime);
-
-                        if (newState.bullets.length !== 0) {
+                        const initialBulletCount = testState.bullets.length;
+                        updateGameState(testState, keys, deltaTime, currentTime);
+                        if (testState.bullets.length !== initialBulletCount) {
                             throw new Error('Should not fire bullet due to rate limiting');
+                        }
+                    });
+
+                    it('should fire bullets automatically when auto-fire is enabled', function() {
+                        testState.autoFire = true;
+                        testState.lastFireTime = 0; // Reset to allow firing
+                        const keys = {}; // No keys pressed
+                        const initialBulletCount = testState.bullets.length;
+                        const newState = updateGameState(testState, keys, 0.1, 1000);
+                        if (newState.bullets.length <= initialBulletCount) {
+                            throw new Error('Should fire bullet automatically when auto-fire is enabled');
+                        }
+                    });
+
+                    it('should not auto-fire when auto-fire is disabled', function() {
+                        testState.autoFire = false;
+                        const keys = {}; // No keys pressed
+                        const initialBulletCount = testState.bullets.length;
+                        updateGameState(testState, keys, 0.1, 1000);
+                        if (testState.bullets.length !== initialBulletCount) {
+                            throw new Error('Should not fire bullet when auto-fire is disabled and no keys pressed');
+                        }
+                    });
+
+                    it('should not update game state when paused', function() {
+                        testState.paused = true;
+                        const initialShipX = testState.ship.x;
+                        const keys = { 'ArrowLeft': true }; // Try to rotate ship
+                        const newState = updateGameState(testState, keys, 0.1, 1000);
+                        
+                        // When paused, state should be returned unchanged
+                        if (newState.ship.x !== initialShipX) {
+                            throw new Error('Ship should not move when game is paused');
+                        }
+                        if (newState.ship.angle !== testState.ship.angle) {
+                            throw new Error('Ship should not rotate when game is paused');
+                        }
+                    });
+
+                    it('should toggle pause state when Escape key is pressed', function() {
+                        // Test pausing when not paused
+                        testState.paused = false;
+                        testState.escapeKeyWasPressed = false;
+                        const keys = { 'Escape': true };
+                        const newState = updateGameState(testState, keys, 0.1, 1000);
+                        
+                        if (!newState.paused) {
+                            throw new Error('Game should be paused after pressing Escape');
+                        }
+                        if (!newState.escapeKeyWasPressed) {
+                            throw new Error('escapeKeyWasPressed should be true after pressing Escape');
+                        }
+                        
+                        // Test that holding Escape doesn't toggle again
+                        const stillPausedState = updateGameState(newState, keys, 0.1, 1000);
+                        if (!stillPausedState.paused) {
+                            throw new Error('Game should remain paused when Escape key is held');
+                        }
+                        
+                        // Test unpausing when key is released and pressed again
+                        const keyReleasedState = updateGameState(newState, {}, 0.1, 1000); // No keys pressed
+                        if (keyReleasedState.escapeKeyWasPressed) {
+                            throw new Error('escapeKeyWasPressed should be false when key is released');
+                        }
+                        
+                        const unpausedState = updateGameState(keyReleasedState, keys, 0.1, 1000);
+                        if (unpausedState.paused) {
+                            throw new Error('Game should be unpaused after releasing and pressing Escape again');
                         }
                     });
 
@@ -1563,7 +2153,9 @@
                     it('should ensure split asteroids are always smaller than parent', function() {
                         // Test with a large asteroid that should split
                         testState.bullets = [{ x: 100, y: 100, vx: 0, vy: 0, distanceTraveled: 0 }];
-                        testState.asteroids = [{ x: 100, y: 100, radius: 40, vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [] }];
+                        testState.asteroids = [createAsteroid(100, 100)];
+                        // Ensure it's large enough to split
+                        testState.asteroids[0].baseRadius = 40;
                         const originalRadius = testState.asteroids[0].radius;
 
                         const newState = updateGameState(testState, {}, 0.1, 0);
@@ -1590,10 +2182,15 @@
                     });
 
                     it('should detect ship-asteroid collision and split large asteroids', function() {
+                        const scaleFactor = calculateScaleFactor();
+                        
                         // Use a large asteroid that should split when hit by ship
-                        testState.asteroids = [{ x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, radius: 30, vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [] }];
+                        testState.asteroids = [createAsteroid(GAME_WIDTH / 2, GAME_HEIGHT / 2)];
+                        // Ensure it's large enough to split
+                        testState.asteroids[0].baseRadius = 30;
                         const initialLives = testState.lives;
                         const initialAsteroidCount = testState.asteroids.length;
+                        const originalScaledRadius = 30 * scaleFactor;
 
                         const newState = updateGameState(testState, {}, 0.1, 0);
 
@@ -1610,13 +2207,17 @@
                             throw new Error(`Expected 2 asteroids after split, got ${newState.asteroids.length}`);
                         }
 
-                        // Each smaller asteroid should have smaller radius
+                        // Each smaller asteroid should have smaller radius than original
+                        // Split asteroids have baseRadius * 0.6, so scaled radius should be originalScaledRadius * 0.6
+                        const expectedMaxRadius = originalScaledRadius * 0.6;
+                        const expectedMinRadius = expectedMaxRadius * 0.5; // Allow some variance
+                        
                         newState.asteroids.forEach((asteroid, i) => {
-                            if (asteroid.radius >= 30) {
-                                throw new Error(`Small asteroid ${i} should have smaller radius than original (30), got ${asteroid.radius}`);
+                            if (asteroid.radius >= originalScaledRadius) {
+                                throw new Error(`Small asteroid ${i} should have smaller radius than original (${originalScaledRadius}), got ${asteroid.radius}`);
                             }
-                            if (asteroid.radius < 15) {
-                                throw new Error(`Small asteroid ${i} radius too small, got ${asteroid.radius}`);
+                            if (asteroid.radius < expectedMinRadius) {
+                                throw new Error(`Small asteroid ${i} radius too small (expected >= ${expectedMinRadius}), got ${asteroid.radius}`);
                             }
                         });
                     });
@@ -1942,7 +2543,12 @@
 
             // Complete test execution message
             if (isNodeJS) {
-                console.log('\nTests completed successfully!');
+                if (testFailures === 0) {
+                    console.log(`\n${colors.green}${colors.bold}All ${testTotal} tests passed successfully!${colors.reset}`);
+                } else {
+                    console.log(`\n${colors.red}${colors.bold}${testFailures} out of ${testTotal} tests FAILED!${colors.reset}`);
+                    process.exit(1);
+                }
             } else {
                 // Add green completion message to browser output
                 const testOutput = document.querySelector('.test-output');

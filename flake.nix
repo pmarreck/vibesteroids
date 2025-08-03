@@ -15,12 +15,14 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             nodejs_22
+            pnpm
           ];
 
           shellHook = ''
             echo "Vibesteroids development environment"
             echo "Node.js version: $(node --version)"
             echo "npm version: $(npm --version)"
+            echo "pnpm version: $(pnpm --version)"
           '';
         };
       });
