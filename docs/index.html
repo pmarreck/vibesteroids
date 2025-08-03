@@ -192,7 +192,8 @@
 
     <script>
         // Check if we're in test mode (browser) or Node.js environment
-        const isNodeJS = typeof window === 'undefined';
+        // Use process instead of window check since jsdom provides window in Node.js
+        const isNodeJS = typeof process !== 'undefined' && process.versions && process.versions.node;
         const urlParams = isNodeJS ? { has: () => true } : new URLSearchParams(window.location.search);
         const isTestMode = isNodeJS || urlParams.has('test');
 
@@ -572,6 +573,12 @@
             titleSplashFrameCount: 0,
             level: 1, // Current level/wave number
 
+            // Death Blossom state (mobile-only secret feature)
+            deathBlossomActive: false,
+            deathBlossomStartTime: 0,
+            deathBlossomRotations: 0,
+            deathBlossomAvailable: true,
+
             // Game constants (scaled dynamically)
             get SHIP_ACCELERATION() { return scale(300); },
             ROTATION_SPEED: 5, // radians per second (angular, no scaling needed)
@@ -650,24 +657,30 @@
         let debugInfoVisible = false;
         
         // Top-left corner: toggle debug info
-        document.getElementById('debugToggleArea').addEventListener('click', (e) => {
-            e.preventDefault();
-            debugInfoVisible = !debugInfoVisible;
-            const debugElement = document.getElementById('debugInfo');
-            if (debugElement) {
-                debugElement.style.display = debugInfoVisible ? 'block' : 'none';
-            }
-        });
+        const debugToggleArea = document.getElementById('debugToggleArea');
+        if (debugToggleArea) {
+            debugToggleArea.addEventListener('click', (e) => {
+                e.preventDefault();
+                debugInfoVisible = !debugInfoVisible;
+                const debugElement = document.getElementById('debugInfo');
+                if (debugElement) {
+                    debugElement.style.display = debugInfoVisible ? 'block' : 'none';
+                }
+            });
+        }
         
         // Top-right corner: toggle test mode
-        document.getElementById('testModeToggleArea').addEventListener('click', (e) => {
-            e.preventDefault();
-            if (!testModeTriggered && !isNodeJS) {
-                testModeTriggered = true;
-                // Reload page with test parameter
-                window.location.href = window.location.pathname + '?test';
-            }
-        });
+        const testModeToggleArea = document.getElementById('testModeToggleArea');
+        if (testModeToggleArea) {
+            testModeToggleArea.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!testModeTriggered && !isNodeJS) {
+                    testModeTriggered = true;
+                    // Reload page with test parameter
+                    window.location.href = window.location.pathname + '?test';
+                }
+            });
+        }
 
         // Mobile touch controls
         let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
