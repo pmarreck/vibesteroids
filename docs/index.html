@@ -2346,18 +2346,9 @@
 
         // Test Suite
         if (isTestMode) {
-            // Setup simple test framework for both Node.js and browser
-            // Use existing global counters if available (Node.js), otherwise create new ones for browser
-            let testFailures, testTotal;
-            if (isNodeJS && typeof global !== 'undefined' && global.testFailures !== undefined) {
-                // In Node.js, use the global counters from the test runner
-                testFailures = global.testFailures;
-                testTotal = global.testTotal;
-            } else {
-                // In browser, create new counters
-                testFailures = 0;
-                testTotal = 0;
-            }
+            // Test framework with browser as the single source of truth
+            let testFailures = 0;
+            let testTotal = 0;
             
             // ANSI color codes for terminal output (available in both environments)
             const colors = {
@@ -2367,65 +2358,77 @@
                 bold: '\x1b[1m'
             };
             
-            if (isNodeJS) {
-                console.log('Running Asteroids Game Tests in Node.js\n');
-                
-                // Only define test functions if they don't already exist (test runner may have defined them)
-                if (!global.describe) {
-                    global.describe = (name, fn) => {
-                        console.log(name);
-                        fn();
-                    };
-                }
-                if (!global.it) {
-                    global.it = (name, fn) => {
-                        testTotal++;
-                        try {
-                            fn();
-                            console.log(`  ${colors.green}✓${colors.reset} ${name}`);
-                        } catch(e) {
-                            testFailures++;
-                            console.log(`  ${colors.red}✗${colors.reset} ${name}: ${colors.red}${e.message}${colors.reset}`);
-                        }
-                    };
-                }
-                if (!global.beforeEach) {
-                    global.beforeEach = (fn) => fn();
-                }
-            } else {
-                console.log('Running Asteroids Game Tests in Browser\n');
-
-                // Create a test output container for browser display
-                const testOutput = document.createElement('div');
+            // Create test output container for browser display (when not in Node.js)
+            let testOutput;
+            if (!isNodeJS) {
+                testOutput = document.createElement('div');
                 testOutput.className = 'test-output';
                 document.body.appendChild(testOutput);
+            }
 
-                window.describe = (name, fn) => {
+            // Unified test framework functions (work in both environments)
+            function describe(name, fn) {
+                if (isNodeJS) {
+                    console.log(`\n${name}:`);
+                } else {
                     const suiteElement = document.createElement('div');
                     suiteElement.className = 'test-suite';
                     suiteElement.textContent = name + ':';
                     testOutput.appendChild(suiteElement);
-                    fn();
-                };
-                window.it = (name, fn) => {
-                    const testElement = document.createElement('div');
-                    testElement.className = 'test-case';
+                }
+                fn();
+            }
 
-                    try {
-                        fn();
+            function it(name, fn) {
+                try {
+                    fn();
+                    // Test passed
+                    if (isNodeJS) {
+                        console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+                    } else {
+                        const testElement = document.createElement('div');
+                        testElement.className = 'test-case';
                         testElement.innerHTML = `<span class="test-pass">✓</span> ${name}`;
+                        testOutput.appendChild(testElement);
                         console.log(`  ✓ ${name}`);
-                    } catch(e) {
-                        testFailures++;
+                    }
+                } catch(e) {
+                    testFailures++;
+                    // Test failed
+                    if (isNodeJS) {
+                        console.log(`  ${colors.red}✗${colors.reset} ${name}: ${colors.red}${e.message}${colors.reset}`);
+                    } else {
+                        const testElement = document.createElement('div');
+                        testElement.className = 'test-case';
                         testElement.innerHTML = `<span class="test-fail">✗</span> <span class="test-fail-message">${name}: ${e.message}</span>`;
+                        testOutput.appendChild(testElement);
                         console.log(`  ✗ ${name}: ${e.message}`);
                         console.error('Full error details:', e);
                     }
+                }
+                testTotal++;
+                
+                // Debug logging to track progress
+                if (testTotal % 20 === 0) {
+                    console.log(`[DEBUG] Test count: ${testTotal}, Failures: ${testFailures}`);
+                }
+            }
 
-                    testTotal++;
-                    testOutput.appendChild(testElement);
-                };
-                window.beforeEach = (fn) => fn();
+            function beforeEach(fn) {
+                fn();
+            }
+
+            // Make functions available globally
+            if (isNodeJS) {
+                global.describe = describe;
+                global.it = it;
+                global.beforeEach = beforeEach;
+                // Expose test results for Node.js runner
+                global.getTestResults = () => ({ total: testTotal, failures: testFailures });
+            } else {
+                window.describe = describe;
+                window.it = it;
+                window.beforeEach = beforeEach;
             }
 
             // Hide the game canvas and show test results

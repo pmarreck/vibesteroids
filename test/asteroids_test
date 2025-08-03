@@ -116,49 +116,24 @@ global.requestAnimationFrame = function(callback) {
     return 1;
 };
 
-// Set up test framework functions for Node.js environment
-// (The game code expects these to be available when running tests)
-let testFailures = 0;
-let testTotal = 0;
-
-// Simple test framework implementation for Node.js
-global.describe = function(name, fn) {
-    console.log(`\n${name}:`);
-    fn();
-};
-
-global.it = function(name, fn) {
-    try {
-        fn();
-        console.log(`  ✓ ${name}`);
-    } catch (e) {
-        testFailures++;
-        console.log(`  ✗ ${name}: ${e.message}`);
-    }
-    testTotal++;
-    // Debug logging to see if counters are being updated
-    if (testTotal % 20 === 0) {
-        console.log(`[DEBUG] Test count: ${testTotal}, Failures: ${testFailures}`);
-    }
-};
-
-global.beforeEach = function(fn) {
-    fn();
-};
-
-// Execute the JavaScript code
+// Execute the JavaScript code - the browser code will handle all test framework setup
 try {
+    console.log('Running Asteroids Game Tests in Node.js\n');
+    
     eval(jsCode);
     
-    // Tests should have run by now - show summary
-    console.log(`\n--- Test Summary ---`);
-    console.log(`Total tests: ${testTotal}`);
-    console.log(`Passed: ${testTotal - testFailures}`);
-    console.log(`Failed: ${testFailures}`);
+    // Get test results from the browser code
+    const results = global.getTestResults ? global.getTestResults() : { total: 0, failures: 1 };
     
-    if (testFailures > 0) {
+    // Show summary using results from browser code
+    console.log(`\n--- Test Summary ---`);
+    console.log(`Total tests: ${results.total}`);
+    console.log(`Passed: ${results.total - results.failures}`);
+    console.log(`Failed: ${results.failures}`);
+    
+    if (results.failures > 0) {
         console.log('\nSome tests failed!');
-        process.exit(1);
+        process.exit(results.failures > 255 ? 255 : results.failures); // Cap at 255 for shell exit codes
     } else {
         console.log('\nAll tests passed!');
         process.exit(0);
