@@ -84,6 +84,8 @@
             border: 1px solid #ccc;
             max-height: 80vh;
             overflow-y: auto;
+            position: relative;
+            z-index: 4000; /* Higher than mobile tutorial (3000) to ensure test results appear on top */
         }
 
         .test-suite {
@@ -156,8 +158,8 @@
             <h2 style="color: #00ff00; margin-bottom: 30px;">🚀 Mobile Controls</h2>
             <div style="font-size: 18px; line-height: 1.6; margin-bottom: 30px;">
                 <p><strong>Left Edge:</strong> Touch & drag vertically to rotate ship</p>
+                <p><strong>Left Edge:</strong> Ship fires only while finger is touching</p>
                 <p><strong>Anywhere Else:</strong> Tap or hold to thrust</p>
-                <p><strong>Auto-Fire:</strong> Bullets fire automatically</p>
                 <p style="color: #ffaa00;"><strong>🔊 Turn off silent mode</strong> to hear sound effects</p>
             </div>
             <p style="font-size: 14px; color: #888;">Tap anywhere to dismiss (auto-dismiss in <span id="tutorialCountdown">10</span>s)</p>
@@ -300,7 +302,6 @@
 
             playShoot() {
                 if (!this.audioContext) return;
-                if (!this.initialized) return;
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
 
@@ -486,6 +487,9 @@
         const BASE_HEIGHT = 768;
         const BASE_DIAGONAL = Math.sqrt(BASE_WIDTH * BASE_WIDTH + BASE_HEIGHT * BASE_HEIGHT);
         
+        // Title splash configuration
+        const TITLE_SPLASH_STEADY_DURATION_SECONDS = 2.0; // Configurable steady glow time
+        
         // Dynamic game dimensions (will be updated based on viewport)
         let GAME_WIDTH = BASE_WIDTH;
         let GAME_HEIGHT = BASE_HEIGHT;
@@ -564,6 +568,8 @@
             lastFireTime: 0,
             escapeKeyWasPressed: false,
             kidMode: false,
+            titleSplashVisible: false,
+            titleSplashFrameCount: 0,
 
             // Game constants (scaled dynamically)
             get SHIP_ACCELERATION() { return scale(300); },
@@ -667,6 +673,8 @@
         let touchStartY = null;
         let touchStartX = null;
         let isThrusting = false;
+        let isRotaryTouching = false;
+        let shipStartAngle = null;
         
         // Get canvas reference for mobile touch events
         const canvas = document.getElementById('gameCanvas');
@@ -729,8 +737,8 @@
         
         // Mobile touch event handlers
         if (isMobile && canvas) {
-            // Enable auto-fire on mobile
-            GameState.autoFire = true;
+            // Disable general auto-fire on mobile (use touch-based firing instead)
+            GameState.autoFire = false;
             
             // Show tutorial after a brief delay
             setTimeout(showMobileTutorial, 1000);
@@ -763,18 +771,13 @@
                 touchStartX = x;
                 touchStartY = y;
                 
-                // Left edge (20% of screen width) for rotation
+                // Left edge (20% of screen width) for linear position mapping
                 if (x < GAME_WIDTH * 0.2) {
-                    // Apply linear position-to-angle mapping immediately
-                    const normalizedY = y / GAME_HEIGHT; // 0 to 1
-                    const angleRange = 4 * Math.PI; // 2 full rotations
-                    const centerAngle = -Math.PI / 2; // Pointing up
+                    isRotaryTouching = true;
                     
-                    // Map: 0 (top) -> -2.5π, 0.5 (center) -> -π/2, 1 (bottom) -> 1.5π
-                    const targetAngle = centerAngle + (normalizedY - 0.5) * angleRange;
-                    
-                    // Set ship angle directly
-                    GameState.ship.angle = targetAngle;
+                    // Store the Y position where touch started and current ship angle
+                    touchStartY = y;
+                    shipStartAngle = GameState.ship.angle;
                 } else {
                     // Anywhere else for thrust
                     isThrusting = true;
@@ -788,20 +791,18 @@
                 const x = touch.clientX - rect.left;
                 const y = touch.clientY - rect.top;
                 
-                // Handle rotation on left edge - linear position to angle mapping
-                if (touchStartX < GAME_WIDTH * 0.2) {
-                    // Map vertical position to ship angle
-                    // Center of screen = pointing up (-π/2)
-                    // Top to bottom = 2 full rotations (4π range)
-                    const normalizedY = y / GAME_HEIGHT; // 0 to 1
-                    const angleRange = 4 * Math.PI; // 2 full rotations
-                    const centerAngle = -Math.PI / 2; // Pointing up
+                // Handle linear position mapping on left edge
+                if (isRotaryTouching && touchStartX < GAME_WIDTH * 0.2) {
+                    // Calculate vertical drag distance from touch start
+                    const yDelta = y - touchStartY;
                     
-                    // Map: 0 (top) -> -2.5π, 0.5 (center) -> -π/2, 1 (bottom) -> 1.5π
-                    const targetAngle = centerAngle + (normalizedY - 0.5) * angleRange;
+                    // Convert Y delta to angle delta (linear mapping)
+                    // Full screen height = 4π radians (2 full rotations)
+                    const angleRange = 4 * Math.PI;
+                    const angleDelta = (yDelta / GAME_HEIGHT) * angleRange;
                     
-                    // Set ship angle directly (no rotation direction needed)
-                    GameState.ship.angle = targetAngle;
+                    // Apply rotation relative to ship's starting angle
+                    GameState.ship.angle = shipStartAngle + angleDelta;
                 }
             });
             
@@ -810,6 +811,8 @@
                 touchStartX = null;
                 touchStartY = null;
                 isThrusting = false;
+                isRotaryTouching = false;
+                shipStartAngle = null;
             });
             
             canvas.addEventListener('touchcancel', (e) => {
@@ -817,6 +820,8 @@
                 touchStartX = null;
                 touchStartY = null;
                 isThrusting = false;
+                isRotaryTouching = false;
+                shipStartAngle = null;
             });
         }
 
@@ -845,6 +850,9 @@
             // Clear canvas
             ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw neon title splash (before other objects so they appear on top)
+            drawNeonTitle(ctx);
             
             // Debug info for mobile debugging (only when visible)
             const debugElement = documentObj.getElementById('debugInfo');
@@ -940,6 +948,119 @@
                     pauseScreen.style.display = 'none';
                 }
             }
+        }
+
+        // Pure function to get total title splash lifetime in frames
+        function getTitleSplashTotalFrames(steadyDurationSeconds = TITLE_SPLASH_STEADY_DURATION_SECONDS, frameRate = 60) {
+            const fadeInFrames = Math.round(1.0 * frameRate); // 1 second fade in
+            const steadyFrames = Math.round(steadyDurationSeconds * frameRate); // Configurable steady duration
+            const fadeOutFrames = Math.round(1.0 * frameRate); // 1 second fade out
+            return fadeInFrames + steadyFrames + fadeOutFrames;
+        }
+
+        // Pure function to calculate title splash alpha based on frame count
+        function calculateTitleSplashAlpha(frameCount, steadyDurationSeconds = TITLE_SPLASH_STEADY_DURATION_SECONDS, frameRate = 60) {
+            const fadeInFrames = Math.round(1.0 * frameRate); // 1 second fade in
+            const steadyFrames = Math.round(steadyDurationSeconds * frameRate); // Configurable steady duration
+            const fadeOutFrames = Math.round(1.0 * frameRate); // 1 second fade out
+            const totalFrames = fadeInFrames + steadyFrames + fadeOutFrames;
+            
+            if (frameCount < 0) return 0;
+            if (frameCount >= totalFrames) return 0;
+            
+            if (frameCount < fadeInFrames) {
+                // Fade in: 0 to 1 over fadeInFrames (but start with small positive value)
+                return (frameCount + 1) / fadeInFrames;
+            } else if (frameCount < fadeInFrames + steadyFrames) {
+                // Steady state: full opacity
+                return 1;
+            } else {
+                // Fade out: 1 to 0 over fadeOutFrames
+                const fadeOutProgress = frameCount - (fadeInFrames + steadyFrames);
+                return 1 - (fadeOutProgress / fadeOutFrames);
+            }
+        }
+
+        function drawNeonTitle(ctx) {
+            if (!GameState.titleSplashVisible) return;
+            
+            // Calculate alpha using pure function based on frame count
+            const alpha = calculateTitleSplashAlpha(GameState.titleSplashFrameCount);
+            
+            // If alpha is 0, we're done - hide the splash
+            if (alpha <= 0) {
+                GameState.titleSplashVisible = false;
+                return;
+            }
+            
+            ctx.save();
+            
+            // Position: centered horizontally, 1/3 down from top
+            const x = GAME_WIDTH / 2;
+            const y = GAME_HEIGHT / 3;
+            
+            // Scale font size with viewport
+            const fontSize = scale(60);
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Create 80's neon effect with multiple glowing layers
+            const text = 'VIBESTEROIDS';
+            
+            // Outer glow (largest, most transparent)
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.shadowColor = '#ff00ff'; // Magenta
+            ctx.shadowBlur = scale(20);
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = scale(8);
+            ctx.strokeText(text, x, y);
+            
+            // Middle glow
+            ctx.globalAlpha = alpha * 0.6;
+            ctx.shadowBlur = scale(10);
+            ctx.strokeStyle = '#00ffff'; // Cyan
+            ctx.lineWidth = scale(4);
+            ctx.strokeText(text, x, y);
+            
+            // Inner bright core
+            ctx.globalAlpha = alpha;
+            ctx.shadowBlur = scale(5);
+            ctx.fillStyle = '#ffffff'; // White core
+            ctx.fillText(text, x, y);
+            
+            // Add subtitle "by Peter Marreck" below the main title
+            const subtitleText = 'by Peter Marreck';
+            const subtitleFontSize = scale(16); // Much smaller than main title
+            const subtitleY = y + fontSize/2 + scale(20); // Position below main title
+            const subtitleX = x - scale(200); // Left-aligned with the V in VIBESTEROIDS
+            
+            ctx.font = `${subtitleFontSize}px 'Courier New', monospace`;
+            ctx.textAlign = 'left';
+            
+            // Subtle glow for subtitle (softer than main title)
+            ctx.globalAlpha = alpha * 0.4;
+            ctx.shadowColor = '#00ffff'; // Cyan glow
+            ctx.shadowBlur = scale(8);
+            ctx.fillStyle = '#cccccc'; // Light gray text
+            ctx.fillText(subtitleText, subtitleX, subtitleY);
+            
+            // Reset text alignment for any future text
+            ctx.textAlign = 'center';
+            
+            // Add some 80's style scan lines effect
+            ctx.globalAlpha = alpha * 0.1;
+            ctx.strokeStyle = '#00ff00'; // Green scan lines
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 5; i++) {
+                const scanY = y - fontSize/2 + (i * fontSize/4);
+                ctx.beginPath();
+                ctx.moveTo(x - scale(200), scanY);
+                ctx.lineTo(x + scale(200), scanY);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
         }
 
         function drawShip(ctx, ship) {
@@ -1086,7 +1207,9 @@
                 escapeKeyWasPressed: keysPressed['Escape'] || false,
                 kidMode: state.kidMode,
                 stars: state.stars,
-                sound: state.sound // Pass through the sound interface
+                sound: state.sound, // Pass through the sound interface
+                titleSplashVisible: state.titleSplashVisible,
+                titleSplashFrameCount: state.titleSplashFrameCount
             };
 
             // Check if ship explosion should end
@@ -1111,6 +1234,10 @@
                     newState.ship.vx = 0;
                     newState.ship.vy = 0;
                     newState.ship.angle = -Math.PI / 2;
+                    
+                    // Trigger neon title splash on ship respawn
+                    newState.titleSplashVisible = true;
+                    newState.titleSplashFrameCount = 0;
                 }
             }
 
@@ -1156,8 +1283,9 @@
                 // Fire bullets (with rate limiting)
                 const fireDelay = 200; // milliseconds between shots
 
-                // Fire when space is pressed OR auto-fire is enabled
-                const shouldFire = (keysPressed[' '] || state.autoFire) && 
+                // Fire when space is pressed OR auto-fire is enabled OR (on mobile) finger is on rotary controller
+                const isMobileRotaryFiring = typeof isRotaryTouching !== 'undefined' && isRotaryTouching;
+                const shouldFire = (keysPressed[' '] || (state.autoFire && !isMobileRotaryFiring) || isMobileRotaryFiring) && 
                     newState.bullets.length < state.MAX_BULLETS &&
                     (currentTime - state.lastFireTime) > fireDelay;
 
@@ -1324,6 +1452,24 @@
             if (newState.asteroids.length === 0) {
                 spawnAsteroids(newState, state.ASTEROID_SPAWN_COUNT);
             }
+
+            // Increment title splash frame counter if visible (but don't increment past lifetime)
+            if (newState.titleSplashVisible) {
+                const totalFrames = getTitleSplashTotalFrames();
+                if (newState.titleSplashFrameCount < totalFrames) {
+                    newState.titleSplashFrameCount++;
+                }
+            }
+                
+            // Hide splash if it has expired (alpha would be 0)
+            if (newState.titleSplashVisible) {
+                const alpha = calculateTitleSplashAlpha(newState.titleSplashFrameCount);
+                if (alpha <= 0) {
+                    newState.titleSplashVisible = false;
+                }
+            }
+            
+
 
             return newState;
         }
@@ -1558,6 +1704,10 @@
             GameState.escapeKeyWasPressed = newState.escapeKeyWasPressed;
             GameState.kidMode = newState.kidMode;
             GameState.stars = newState.stars;
+            GameState.titleSplashVisible = newState.titleSplashVisible;
+            GameState.titleSplashFrameCount = newState.titleSplashFrameCount;
+            GameState.titleSplashStartTime = newState.titleSplashStartTime;
+            GameState.titleSplashElapsed = newState.titleSplashElapsed;
             render(GameState);
 
             requestAnimationFrame(gameLoop);
@@ -1592,10 +1742,9 @@
             GameState.lastFireTime = 0;
             GameState.autoFire = false;
             
-            // Enable auto-fire on mobile devices
-            if (isMobile) {
-                GameState.autoFire = true;
-            }
+            // Show title splash on game start
+            GameState.titleSplashVisible = true;
+            GameState.titleSplashFrameCount = 0;
 
             // Spawn initial asteroids
             spawnAsteroids(GameState, 5);
@@ -2535,6 +2684,357 @@
                         const shouldDrawBoth = !bothState.shipExploding && !bothState.gameOver;
                         if (shouldDrawBoth) {
                             throw new Error('Ship should not be drawn when both exploding and game over');
+                        }
+                    });
+                });
+
+                describe('Title Splash Alpha Calculation', function() {
+                    it('should return 0 for negative frame count', function() {
+                        const alpha = calculateTitleSplashAlpha(-1, 2.0, 60);
+                        if (alpha !== 0) {
+                            throw new Error(`Expected alpha 0 for negative frame, got ${alpha}`);
+                        }
+                    });
+
+                    it('should fade in linearly during first second', function() {
+                        const steadyDuration = 2.0;
+                        const frameRate = 60;
+                        const fadeInFrames = 60; // 1 second at 60fps
+                        
+                        // Test start of fade-in
+                        const alpha0 = calculateTitleSplashAlpha(0, steadyDuration, frameRate);
+                        const expectedAlpha0 = (0 + 1) / fadeInFrames; // Frame 0 should return (0+1)/60
+                        if (Math.abs(alpha0 - expectedAlpha0) > 0.001) {
+                            throw new Error(`Expected alpha ${expectedAlpha0} at frame 0, got ${alpha0}`);
+                        }
+                        
+                        // Test middle of fade-in
+                        const alpha30 = calculateTitleSplashAlpha(30, steadyDuration, frameRate);
+                        const expected30 = (30 + 1) / fadeInFrames; // With our fix: (30+1)/60 = 0.5167
+                        if (Math.abs(alpha30 - expected30) > 0.001) {
+                            throw new Error(`Expected alpha ${expected30} at frame 30, got ${alpha30}`);
+                        }
+                        
+                        // Test end of fade-in
+                        const alpha59 = calculateTitleSplashAlpha(59, steadyDuration, frameRate);
+                        const expected59 = (59 + 1) / fadeInFrames; // With our fix: (59+1)/60 = 1.0
+                        if (Math.abs(alpha59 - expected59) > 0.001) {
+                            throw new Error(`Expected alpha ${expected59} at frame 59, got ${alpha59}`);
+                        }
+                    });
+
+                    it('should be steady at full opacity during configured steady duration', function() {
+                        const steadyDuration = 2.0;
+                        const frameRate = 60;
+                        const fadeInFrames = 60; // 1 second
+                        const steadyFrames = 120; // 2 seconds at 60fps
+                        
+                        // Test start of steady state
+                        const alphaStart = calculateTitleSplashAlpha(fadeInFrames, steadyDuration, frameRate);
+                        if (alphaStart !== 1) {
+                            throw new Error(`Expected alpha 1 at start of steady state (frame ${fadeInFrames}), got ${alphaStart}`);
+                        }
+                        
+                        // Test middle of steady state
+                        const alphaMid = calculateTitleSplashAlpha(fadeInFrames + 60, steadyDuration, frameRate);
+                        if (alphaMid !== 1) {
+                            throw new Error(`Expected alpha 1 in middle of steady state, got ${alphaMid}`);
+                        }
+                        
+                        // Test end of steady state
+                        const alphaEnd = calculateTitleSplashAlpha(fadeInFrames + steadyFrames - 1, steadyDuration, frameRate);
+                        if (alphaEnd !== 1) {
+                            throw new Error(`Expected alpha 1 at end of steady state, got ${alphaEnd}`);
+                        }
+                    });
+
+                    it('should fade out linearly during last second', function() {
+                        const steadyDuration = 2.0;
+                        const frameRate = 60;
+                        const fadeInFrames = 60; // 1 second
+                        const steadyFrames = 120; // 2 seconds
+                        const fadeOutFrames = 60; // 1 second
+                        const fadeOutStart = fadeInFrames + steadyFrames;
+                        
+                        // Test start of fade-out (should be 1.0)
+                        const alphaStart = calculateTitleSplashAlpha(fadeOutStart, steadyDuration, frameRate);
+                        if (alphaStart !== 1) {
+                            throw new Error(`Expected alpha 1 at start of fade-out (frame ${fadeOutStart}), got ${alphaStart}`);
+                        }
+                        
+                        // Test middle of fade-out
+                        const alphaMid = calculateTitleSplashAlpha(fadeOutStart + 30, steadyDuration, frameRate);
+                        const expectedMid = 1 - (30 / fadeOutFrames);
+                        if (Math.abs(alphaMid - expectedMid) > 0.001) {
+                            throw new Error(`Expected alpha ${expectedMid} at middle of fade-out, got ${alphaMid}`);
+                        }
+                        
+                        // Test near end of fade-out
+                        const alphaEnd = calculateTitleSplashAlpha(fadeOutStart + 59, steadyDuration, frameRate);
+                        const expectedEnd = 1 - (59 / fadeOutFrames);
+                        if (Math.abs(alphaEnd - expectedEnd) > 0.001) {
+                            throw new Error(`Expected alpha ${expectedEnd} at end of fade-out, got ${alphaEnd}`);
+                        }
+                    });
+
+                    it('should be invisible after splash lifetime ends', function() {
+                        const steadyDuration = 2.0;
+                        const frameRate = 60;
+                        const totalFrames = getTitleSplashTotalFrames(steadyDuration, frameRate);
+                        
+                        // Test exactly at end
+                        const alphaAtEnd = calculateTitleSplashAlpha(totalFrames, steadyDuration, frameRate);
+                        if (alphaAtEnd !== 0) {
+                            throw new Error(`Expected alpha 0 at end of lifetime (frame ${totalFrames}), got ${alphaAtEnd}`);
+                        }
+                        
+                        // Test past end
+                        const alphaPastEnd = calculateTitleSplashAlpha(totalFrames + 10, steadyDuration, frameRate);
+                        if (alphaPastEnd !== 0) {
+                            throw new Error(`Expected alpha 0 past end of lifetime, got ${alphaPastEnd}`);
+                        }
+                    });
+
+                    it('should work with different steady durations', function() {
+                        const frameRate = 60;
+                        
+                        // Test with 1 second steady duration
+                        const steadyDuration1 = 1.0;
+                        const totalFrames1 = getTitleSplashTotalFrames(steadyDuration1, frameRate);
+                        const expectedTotal1 = 60 + 60 + 60; // fade-in + steady + fade-out
+                        if (totalFrames1 !== expectedTotal1) {
+                            throw new Error(`Expected total frames ${expectedTotal1} for 1s steady, got ${totalFrames1}`);
+                        }
+                        
+                        // Test with 3 second steady duration
+                        const steadyDuration3 = 3.0;
+                        const totalFrames3 = getTitleSplashTotalFrames(steadyDuration3, frameRate);
+                        const expectedTotal3 = 60 + 180 + 60; // fade-in + steady + fade-out
+                        if (totalFrames3 !== expectedTotal3) {
+                            throw new Error(`Expected total frames ${expectedTotal3} for 3s steady, got ${totalFrames3}`);
+                        }
+                        
+                        // Test steady state for different durations
+                        const alphaSteady1 = calculateTitleSplashAlpha(90, steadyDuration1, frameRate); // Middle of 1s steady
+                        const alphaSteady3 = calculateTitleSplashAlpha(150, steadyDuration3, frameRate); // Middle of 3s steady
+                        
+                        if (alphaSteady1 !== 1) {
+                            throw new Error(`Expected alpha 1 for 1s steady duration, got ${alphaSteady1}`);
+                        }
+                        if (alphaSteady3 !== 1) {
+                            throw new Error(`Expected alpha 1 for 3s steady duration, got ${alphaSteady3}`);
+                        }
+                    });
+
+                    it('should work with different frame rates', function() {
+                        const steadyDuration = 2.0;
+                        
+                        // Test with 30fps
+                        const frameRate30 = 30;
+                        const totalFrames30 = getTitleSplashTotalFrames(steadyDuration, frameRate30);
+                        const expectedTotal30 = 30 + 60 + 30; // 1s + 2s + 1s at 30fps
+                        if (totalFrames30 !== expectedTotal30) {
+                            throw new Error(`Expected total frames ${expectedTotal30} for 30fps, got ${totalFrames30}`);
+                        }
+                        
+                        // Test with 120fps
+                        const frameRate120 = 120;
+                        const totalFrames120 = getTitleSplashTotalFrames(steadyDuration, frameRate120);
+                        const expectedTotal120 = 120 + 240 + 120; // 1s + 2s + 1s at 120fps
+                        if (totalFrames120 !== expectedTotal120) {
+                            throw new Error(`Expected total frames ${expectedTotal120} for 120fps, got ${totalFrames120}`);
+                        }
+                        
+                        // Test alpha calculations work correctly at different frame rates
+                        const alpha30Mid = calculateTitleSplashAlpha(15, steadyDuration, frameRate30); // Middle of fade-in at 30fps
+                        const alpha120Mid = calculateTitleSplashAlpha(60, steadyDuration, frameRate120); // Middle of fade-in at 120fps
+                        
+                        const expected30Mid = (15 + 1) / 30; // (15+1)/30 = 0.533
+                        const expected120Mid = (60 + 1) / 120; // (60+1)/120 = 0.508
+                        
+                        if (Math.abs(alpha30Mid - expected30Mid) > 0.001) {
+                            throw new Error(`Expected alpha ${expected30Mid} at 30fps mid fade-in, got ${alpha30Mid}`);
+                        }
+                        if (Math.abs(alpha120Mid - expected120Mid) > 0.001) {
+                            throw new Error(`Expected alpha ${expected120Mid} at 120fps mid fade-in, got ${alpha120Mid}`);
+                        }
+                    });
+                });
+
+                describe('Title Splash State Integration', function() {
+                    it('should initialize title splash on game start', function() {
+                        // Manually set up initial title splash state (testing pure state setup)
+                        GameState.titleSplashVisible = true;
+                        GameState.titleSplashFrameCount = 0;
+                        
+                        if (!GameState.titleSplashVisible) {
+                            throw new Error('Title splash should be visible on game start');
+                        }
+                        if (GameState.titleSplashFrameCount !== 0) {
+                            throw new Error(`Title splash frame count should be 0 on start, got ${GameState.titleSplashFrameCount}`);
+                        }
+                        
+                        // Check that alpha calculation works with initial state
+                        const alpha = calculateTitleSplashAlpha(GameState.titleSplashFrameCount);
+                        const expectedAlpha = (0 + 1) / 60; // Frame 0 should return (0+1)/60
+                        if (Math.abs(alpha - expectedAlpha) > 0.001) {
+                            throw new Error(`Expected alpha ${expectedAlpha} at frame 0, got ${alpha}`);
+                        }
+                    });
+
+                    it('should increment frame counter and increase alpha on game state update', function() {
+                        // Set up initial title splash state
+                        GameState.titleSplashVisible = true;
+                        GameState.titleSplashFrameCount = 0;
+                        
+                        // Verify initial state
+                        if (GameState.titleSplashFrameCount !== 0) {
+                            throw new Error(`Expected initial frame count 0, got ${GameState.titleSplashFrameCount}`);
+                        }
+                        
+                        const initialAlpha = calculateTitleSplashAlpha(GameState.titleSplashFrameCount);
+                        const expectedInitialAlpha = (0 + 1) / 60; // Frame 0 should return (0+1)/60
+                        if (Math.abs(initialAlpha - expectedInitialAlpha) > 0.001) {
+                            throw new Error(`Expected initial alpha ${expectedInitialAlpha}, got ${initialAlpha}`);
+                        }
+                        
+                        // Update game state once
+                        const newState = updateGameState(GameState, {}, 16.67, Date.now());
+                        
+                        // Verify frame counter incremented
+                        if (newState.titleSplashFrameCount !== 1) {
+                            throw new Error(`Expected frame count 1 after update, got ${newState.titleSplashFrameCount}`);
+                        }
+                        
+                        // Verify alpha increased
+                        const newAlpha = calculateTitleSplashAlpha(newState.titleSplashFrameCount);
+                        if (newAlpha <= initialAlpha) {
+                            throw new Error(`Expected alpha to increase from ${initialAlpha} to ${newAlpha}`);
+                        }
+                        
+                        // Verify splash is still visible
+                        if (!newState.titleSplashVisible) {
+                            throw new Error('Title splash should still be visible after first update');
+                        }
+                    });
+
+                    it('should maintain title splash visibility during fade-in phase', function() {
+                        // Set up initial title splash state
+                        GameState.titleSplashVisible = true;
+                        GameState.titleSplashFrameCount = 0;
+                        
+                        let currentState = GameState;
+                        
+                        // Update through first 30 frames (middle of fade-in)
+                        for (let i = 0; i < 30; i++) {
+                            currentState = updateGameState(currentState, {}, 16.67, Date.now());
+                        }
+                        
+                        // Verify we're in fade-in phase
+                        if (currentState.titleSplashFrameCount !== 30) {
+                            throw new Error(`Expected frame count 30, got ${currentState.titleSplashFrameCount}`);
+                        }
+                        
+                        // Verify splash is still visible
+                        if (!currentState.titleSplashVisible) {
+                            throw new Error('Title splash should be visible during fade-in phase');
+                        }
+                        
+                        // Verify alpha is in fade-in range (0 < alpha < 1)
+                        const alpha = calculateTitleSplashAlpha(currentState.titleSplashFrameCount);
+                        if (alpha <= 0 || alpha >= 1) {
+                            throw new Error(`Expected alpha between 0 and 1 during fade-in, got ${alpha}`);
+                        }
+                    });
+
+                    it('should reach full opacity during steady state', function() {
+                        // Set up initial title splash state
+                        GameState.titleSplashVisible = true;
+                        GameState.titleSplashFrameCount = 0;
+                        GameState.sound = new MockSoundInterface(); // Initialize sound system to prevent null errors
+                        
+                        let currentState = GameState;
+                        
+                        // Update through fade-in to steady state (60 + 30 = 90 frames)
+                        for (let i = 0; i < 90; i++) {
+                            currentState = updateGameState(currentState, {}, 16.67, Date.now());
+                        }
+                        
+                        // Verify we're in steady state
+                        if (currentState.titleSplashFrameCount !== 90) {
+                            throw new Error(`Expected frame count 90, got ${currentState.titleSplashFrameCount}`);
+                        }
+                        
+                        // Verify splash is still visible
+                        if (!currentState.titleSplashVisible) {
+                            throw new Error('Title splash should be visible during steady state');
+                        }
+                        
+                        // Verify alpha is at full opacity
+                        const alpha = calculateTitleSplashAlpha(currentState.titleSplashFrameCount);
+                        if (alpha !== 1) {
+                            throw new Error(`Expected alpha 1 during steady state, got ${alpha}`);
+                        }
+                    });
+
+                    it('should hide splash after lifetime expires', function() {
+                        // Set up initial title splash state
+                        GameState.titleSplashVisible = true;
+                        GameState.titleSplashFrameCount = 0;
+                        GameState.sound = new MockSoundInterface(); // Initialize sound system to prevent null errors
+                        
+                        let currentState = GameState;
+                        const totalFrames = getTitleSplashTotalFrames();
+                        
+                        // Update past the total lifetime
+                        for (let i = 0; i < totalFrames + 5; i++) {
+                            currentState = updateGameState(currentState, {}, 16.67, Date.now());
+                        }
+                        
+                        // Verify frame counter stopped at total frames (optimization)
+                        if (currentState.titleSplashFrameCount > totalFrames) {
+                            throw new Error(`Frame counter should not exceed ${totalFrames}, got ${currentState.titleSplashFrameCount}`);
+                        }
+                        
+                        // Verify splash is no longer visible
+                        if (currentState.titleSplashVisible) {
+                            throw new Error('Title splash should be hidden after lifetime expires');
+                        }
+                        
+                        // Verify alpha is 0
+                        const alpha = calculateTitleSplashAlpha(currentState.titleSplashFrameCount);
+                        if (alpha !== 0) {
+                            throw new Error(`Expected alpha 0 after lifetime, got ${alpha}`);
+                        }
+                    });
+
+                    it('should trigger splash on ship respawn', function() {
+                        // Set up a state where ship is exploding and will respawn
+                        const explodingState = {
+                            ...GameState,
+                            shipExploding: true,
+                            shipExplosionStartTime: 100,
+                            lives: 2,
+                            titleSplashVisible: false,
+                            titleSplashFrameCount: 999 // Old splash data
+                        };
+                        
+                        // Update with time that should end explosion (2+ seconds later)
+                        const newState = updateGameState(explodingState, {}, 16.67, 2200);
+                        
+                        // Verify ship respawned
+                        if (newState.shipExploding) {
+                            throw new Error('Ship should no longer be exploding');
+                        }
+                        
+                        // Verify title splash was triggered
+                        if (!newState.titleSplashVisible) {
+                            throw new Error('Title splash should be visible on ship respawn');
+                        }
+                        
+                        // Verify frame counter started incrementing (respawn sets to 0, then increments to 1 in same frame)
+                        if (newState.titleSplashFrameCount !== 1) {
+                            throw new Error(`Expected frame count 1 after respawn and state update, got ${newState.titleSplashFrameCount}`);
                         }
                     });
                 });

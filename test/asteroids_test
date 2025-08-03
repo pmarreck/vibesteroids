@@ -5,6 +5,92 @@
 
 const fs = require('fs');
 const path = require('path');
+const { JSDOM } = require('jsdom');
+
+// Set up jsdom environment with all required DOM elements and test URL
+const dom = new JSDOM(`<!DOCTYPE html><html><body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="gameOverScreen"></div>
+    <div id="finalScore"></div>
+    <div id="debugToggleArea"></div>
+    <div id="testModeToggleArea"></div>
+    <div id="mobileTutorial"></div>
+    <div id="debugInfo"></div>
+</body></html>`, {
+    url: 'http://localhost?test',  // Add test parameter to trigger test mode
+    pretendToBeVisual: true,
+    resources: 'usable'
+});
+
+// Set up global objects for browser compatibility
+global.window = dom.window;
+global.document = dom.window.document;
+global.navigator = dom.window.navigator;
+global.HTMLCanvasElement = dom.window.HTMLCanvasElement;
+global.CanvasRenderingContext2D = dom.window.CanvasRenderingContext2D;
+global.Image = dom.window.Image;
+global.Audio = dom.window.Audio || function() { return { play: () => {}, pause: () => {} }; };
+global.AudioContext = dom.window.AudioContext || function() { return { createOscillator: () => ({ connect: () => {}, start: () => {}, stop: () => {} }), createGain: () => ({ connect: () => {}, gain: { value: 0 } }), destination: {} }; };
+
+// Add requestAnimationFrame for Node.js compatibility
+global.requestAnimationFrame = global.requestAnimationFrame || function(callback) {
+    return setTimeout(callback, 16); // ~60fps
+};
+global.cancelAnimationFrame = global.cancelAnimationFrame || function(id) {
+    clearTimeout(id);
+};
+
+// Mock Canvas context for testing (we don't need actual rendering)
+const mockCanvasContext = {
+    fillRect: () => {},
+    strokeRect: () => {},
+    clearRect: () => {},
+    fill: () => {},
+    stroke: () => {},
+    beginPath: () => {},
+    closePath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    arc: () => {},
+    save: () => {},
+    restore: () => {},
+    translate: () => {},
+    rotate: () => {},
+    scale: () => {},
+    fillText: () => {},
+    strokeText: () => {},
+    measureText: () => ({ width: 100 }),
+    createLinearGradient: () => ({ addColorStop: () => {} }),
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    putImageData: () => {},
+    drawImage: () => {},
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    fillStyle: '#000000',
+    strokeStyle: '#000000',
+    lineWidth: 1,
+    lineCap: 'butt',
+    lineJoin: 'miter',
+    miterLimit: 10,
+    shadowBlur: 0,
+    shadowColor: 'rgba(0, 0, 0, 0)',
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    font: '10px sans-serif',
+    textAlign: 'start',
+    textBaseline: 'alphabetic'
+};
+
+// Override HTMLCanvasElement.prototype.getContext to return our mock
+if (global.HTMLCanvasElement) {
+    global.HTMLCanvasElement.prototype.getContext = function(contextType) {
+        if (contextType === '2d') {
+            return mockCanvasContext;
+        }
+        return null;
+    };
+}
 
 // Read the HTML file
 const htmlFile = path.join(__dirname, '..', 'src', 'asteroids.html');
@@ -24,11 +110,58 @@ const jsCode = mainScript.replace(/<\/?script>/g, '');
 // Set up global Math object for Node.js compatibility
 global.Math = Math;
 
-// Execute the code
+// Override requestAnimationFrame to prevent game loop from running
+global.requestAnimationFrame = function(callback) {
+    // Don't actually call the callback - this prevents the game loop
+    return 1;
+};
+
+// Set up test framework functions for Node.js environment
+// (The game code expects these to be available when running tests)
+let testFailures = 0;
+let testTotal = 0;
+
+// Simple test framework implementation for Node.js
+global.describe = function(name, fn) {
+    console.log(`\n${name}:`);
+    fn();
+};
+
+global.it = function(name, fn) {
+    try {
+        fn();
+        console.log(`  ✓ ${name}`);
+    } catch (e) {
+        testFailures++;
+        console.log(`  ✗ ${name}: ${e.message}`);
+    }
+    testTotal++;
+};
+
+global.beforeEach = function(fn) {
+    fn();
+};
+
+// Execute the JavaScript code
 try {
     eval(jsCode);
-    console.log('\nasteroids.html test suite completed successfully!');
+    
+    // Tests should have run by now - show summary
+    console.log(`\n--- Test Summary ---`);
+    console.log(`Total tests: ${testTotal}`);
+    console.log(`Passed: ${testTotal - testFailures}`);
+    console.log(`Failed: ${testFailures}`);
+    
+    if (testFailures > 0) {
+        console.log('\nSome tests failed!');
+        process.exit(1);
+    } else {
+        console.log('\nAll tests passed!');
+        process.exit(0);
+    }
+    
 } catch (error) {
     console.error('Error running tests:', error.message);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
 }
