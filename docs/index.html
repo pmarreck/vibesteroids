@@ -434,6 +434,39 @@
             playExplosion() {
                 this.playAsteroidExplosion();
             }
+
+            playSiren() {
+                if (!this.audioContext) return;
+                
+                // Create a "WHOOP" siren sound like Star Trek red alert
+                const ctx = this.audioContext;
+                const now = ctx.currentTime;
+                
+                // Create three WHOOP sounds in sequence
+                for (let i = 0; i < 3; i++) {
+                    const startTime = now + (i * 0.4); // 400ms apart
+                    
+                    const oscillator = ctx.createOscillator();
+                    const gainNode = ctx.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(ctx.destination);
+                    
+                    // Start low, sweep up quickly, then down - classic WHOOP
+                    oscillator.frequency.setValueAtTime(400, startTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(800, startTime + 0.15);
+                    oscillator.frequency.exponentialRampToValueAtTime(400, startTime + 0.3);
+                    
+                    // Volume envelope
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+                    gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.25);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+                    
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + 0.3);
+                }
+            }
         }
 
         class MockSoundInterface {
@@ -459,6 +492,10 @@
 
             playExplosion() {
                 this.playAsteroidExplosion();
+            }
+
+            playSiren() {
+                this.calls.push({ method: 'playSiren', timestamp: Date.now() });
             }
 
             // Test helper methods
@@ -1772,6 +1809,12 @@
             GameState.lastFireTime = 0;
             GameState.autoFire = false;
             GameState.level = 1; // Reset to level 1 on game restart
+            
+            // Reset Death Blossom state
+            GameState.deathBlossomActive = false;
+            GameState.deathBlossomStartTime = 0;
+            GameState.deathBlossomRotations = 0;
+            GameState.deathBlossomAvailable = true;
             
             // Show title splash on game start
             GameState.titleSplashVisible = true;
