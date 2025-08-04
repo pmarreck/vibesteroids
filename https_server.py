@@ -11,6 +11,13 @@ DIRECTORY = "src"
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
+    
+    def end_headers(self):
+        # Add headers to prevent any caching
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
 
 # Change to the project directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
