@@ -810,15 +810,63 @@
         deathBlossomRotations: 0,
         deathBlossomTotalAngleRotated: 0,
         deathBlossomAvailable: true,
-        DEATH_BLOSSOM_ROTATION_COUNT: 9, // Number of full rotations before Death Blossom ends (configurable)
+        DEATH_BLOSSOM_ROTATION_COUNT: 10, // Number of full rotations before Death Blossom ends (configurable)
 
         // Game constants (scaled dynamically)
         get SHIP_ACCELERATION() {
-          return scale(300);
+          // Level-based acceleration scaling: 300 at level 1, 500 at level 20+
+          const baseAcceleration = 300;
+          const maxAcceleration = 500;
+          const level = this.level || 1;
+          
+          if (level >= 20) {
+            return scale(maxAcceleration);
+          }
+          
+          // Linear scaling from level 1 to 20
+          const accelerationIncrease = (maxAcceleration - baseAcceleration) * ((level - 1) / 19);
+          const currentAcceleration = baseAcceleration + accelerationIncrease;
+          
+          return scale(currentAcceleration);
         },
-        ROTATION_SPEED: 5, // radians per second (angular, no scaling needed)
+        get ROTATION_SPEED() {
+          // Level-based rotation speed scaling (desktop only): 5 at level 1, 10 at level 20
+          // Mobile uses direct touch rotation, so this doesn't apply
+          const baseRotationSpeed = 5;
+          const maxRotationSpeed = 10; // Double the base speed
+          const level = this.level || 1;
+          
+          // On mobile, rotation is handled differently via touch, so use base speed
+          if (isMobile) {
+            return baseRotationSpeed;
+          }
+          
+          if (level >= 20) {
+            return maxRotationSpeed;
+          }
+          
+          // Linear scaling from level 1 to 20 (desktop only)
+          const speedIncrease = (maxRotationSpeed - baseRotationSpeed) * ((level - 1) / 19);
+          const currentRotationSpeed = baseRotationSpeed + speedIncrease;
+          
+          return currentRotationSpeed;
+        },
         get BULLET_SPEED() {
-          return scale(575); // Increased by 15% from 500
+          // Level-based bullet speed scaling: 25% slower at level 1, 100% faster at level 20
+          const baseBulletSpeed = 500; // Original base speed
+          const minBulletSpeed = baseBulletSpeed * 0.75; // 25% slower (375)
+          const maxBulletSpeed = baseBulletSpeed * 2.0; // 100% faster (1000)
+          const level = this.level || 1;
+          
+          if (level >= 20) {
+            return scale(maxBulletSpeed);
+          }
+          
+          // Linear scaling from level 1 to 20
+          const speedIncrease = (maxBulletSpeed - minBulletSpeed) * ((level - 1) / 19);
+          const currentBulletSpeed = minBulletSpeed + speedIncrease;
+          
+          return scale(currentBulletSpeed);
         },
         ASTEROID_SPAWN_COUNT: 5,
         EXTRA_LIFE_INTERVAL: 20000,
@@ -916,16 +964,13 @@
       // Interactive debug toggles
       let debugInfoVisible = false;
 
-      // Top-left corner: toggle debug info
+      // Top-left corner: toggle kid mode (was debug info)
       const debugToggleArea = document.getElementById("debugToggleArea");
       if (debugToggleArea) {
         debugToggleArea.addEventListener("click", (e) => {
           e.preventDefault();
-          debugInfoVisible = !debugInfoVisible;
-          const debugElement = document.getElementById("debugInfo");
-          if (debugElement) {
-            debugElement.style.display = debugInfoVisible ? "block" : "none";
-          }
+          // Toggle kid mode instead of debug info
+          GameState.kidMode = !GameState.kidMode;
         });
       }
 
@@ -1924,7 +1969,7 @@
 
         const rotationSpeed = 6; // 6 radians per second for fast rotation (3x faster)
         const deathBlossomRotationCount =
-          state.DEATH_BLOSSOM_ROTATION_COUNT || 9; // Number of full rotations (configurable)
+          state.DEATH_BLOSSOM_ROTATION_COUNT || 10; // Number of full rotations (configurable)
         const totalAngleToRotate = deathBlossomRotationCount * (2 * mathObj.PI);
 
         // Auto-rotate ship continuously
@@ -2183,6 +2228,11 @@
           newState.ship.x += newState.ship.vx * scaleFactor * deltaTime;
           newState.ship.y += newState.ship.vy * scaleFactor * deltaTime;
 
+          // Apply drag to gradually slow the ship down
+          const dragFactor = 0.99; // Ship retains 99% of velocity per frame (gentle drag)
+          newState.ship.vx *= dragFactor;
+          newState.ship.vy *= dragFactor;
+
           // Screen wrapping
           if (newState.ship.x < 0) newState.ship.x = GAME_WIDTH;
           else if (newState.ship.x > GAME_WIDTH) newState.ship.x = 0;
@@ -2197,8 +2247,20 @@
             // Death Blossom mode: auto-fire at 10x rate, ignore manual controls
             shouldFire = shouldDeathBlossomFire(newState, currentTime);
           } else {
-            // Normal firing logic
-            const fireDelay = 250; // milliseconds between shots
+            // Normal firing logic with level-based fire rate scaling
+            // Scale from 250ms (level 1) to 125ms (level 20+) for double fire rate
+            const baseFireDelay = 250; // milliseconds at level 1
+            const minFireDelay = 125; // milliseconds at level 20+ (double fire rate)
+            const level = newState.level || 1;
+            
+            let fireDelay = baseFireDelay;
+            if (level >= 20) {
+              fireDelay = minFireDelay;
+            } else {
+              // Linear scaling from level 1 to 20
+              const delayReduction = (baseFireDelay - minFireDelay) * ((level - 1) / 19);
+              fireDelay = baseFireDelay - delayReduction;
+            }
             const isMobileRotaryFiring =
               typeof isRotaryTouching !== "undefined" && isRotaryTouching;
             shouldFire =
@@ -2654,15 +2716,15 @@
 
       function limitVelocityByLevel(velocity, level) {
         // Level-based velocity limits for progressive difficulty
-        // Level 11+: unrestricted, Levels 1-10: progressively increasing limits
-        if (level >= 11) {
+        // Level 20+: unrestricted, Levels 1-19: progressively increasing limits
+        if (level >= 20) {
           return velocity; // No limits at high levels
         }
         
-        // Base maximum velocity from initial generation is 50 (from Math.random() - 0.5) * 100)
-        // Level multipliers: Level 1 = 2x (100), Level 2 = 2.5x (125), etc.
-        const baseMaxVelocity = 50;
-        const levelMultiplier = 2 + (level - 1) * 0.5; // 2.0, 2.5, 3.0, 3.5, 4.0, etc.
+        // Base maximum velocity reduced by 10% (from 50 to 45)
+        // Level multipliers: Level 1 = 2x (90), Level 2 = 2.25x (101.25), etc.
+        const baseMaxVelocity = 45; // Reduced by 10%
+        const levelMultiplier = 2 + (level - 1) * 0.25; // Slower progression to reach max at level 20
         const maxAllowedVelocity = baseMaxVelocity * levelMultiplier;
         
         // Clamp velocity magnitude while preserving sign
@@ -3139,56 +3201,56 @@
 
           describe("Level-based Velocity Limiting", function () {
             it("should limit asteroid velocities based on level", function () {
-              // Test level 1: max velocity should be 100 (2x base of 50)
+              // Test level 1: max velocity should be 90 (2x base of 45)
               const level1Vx = limitVelocityByLevel(75, 1); // Within limit
               const level1VxOver = limitVelocityByLevel(150, 1); // Over limit
               
-              if (Math.abs(level1Vx) > 100) {
-                throw new Error(`Level 1 velocity should be limited to 100, got ${Math.abs(level1Vx)}`);
+              if (Math.abs(level1Vx) > 90) {
+                throw new Error(`Level 1 velocity should be limited to 90, got ${Math.abs(level1Vx)}`);
               }
-              if (Math.abs(level1VxOver) > 100) {
-                throw new Error(`Level 1 over-limit velocity should be clamped to 100, got ${Math.abs(level1VxOver)}`);
+              if (Math.abs(level1VxOver) > 90) {
+                throw new Error(`Level 1 over-limit velocity should be clamped to 90, got ${Math.abs(level1VxOver)}`);
               }
-              if (level1VxOver !== (150 > 0 ? 100 : -100)) {
-                throw new Error(`Level 1 should clamp 150 to 100, got ${level1VxOver}`);
+              if (level1VxOver !== (150 > 0 ? 90 : -90)) {
+                throw new Error(`Level 1 should clamp 150 to 90, got ${level1VxOver}`);
               }
             });
 
             it("should increase velocity limits with level progression", function () {
-              // Level 2: max 125 (2.5x), Level 3: max 150 (3x), etc.
-              const level2Max = limitVelocityByLevel(200, 2); // Should clamp to 125
-              const level3Max = limitVelocityByLevel(200, 3); // Should clamp to 150
+              // Level 2: max 101.25 (2.25x), Level 3: max 112.5 (2.5x), etc.
+              const level2Max = limitVelocityByLevel(200, 2); // Should clamp to 101.25
+              const level3Max = limitVelocityByLevel(200, 3); // Should clamp to 112.5
               
-              if (Math.abs(level2Max) !== 125) {
-                throw new Error(`Level 2 max should be 125, got ${Math.abs(level2Max)}`);
+              if (Math.abs(level2Max) !== 101.25) {
+                throw new Error(`Level 2 max should be 101.25, got ${Math.abs(level2Max)}`);
               }
-              if (Math.abs(level3Max) !== 150) {
-                throw new Error(`Level 3 max should be 150, got ${Math.abs(level3Max)}`);
+              if (Math.abs(level3Max) !== 112.5) {
+                throw new Error(`Level 3 max should be 112.5, got ${Math.abs(level3Max)}`);
               }
             });
 
-            it("should not limit velocities at level 11 and above", function () {
+            it("should not limit velocities at level 20 and above", function () {
               const highVelocity = 500;
-              const level11Result = limitVelocityByLevel(highVelocity, 11);
-              const level15Result = limitVelocityByLevel(highVelocity, 15);
+              const level20Result = limitVelocityByLevel(highVelocity, 20);
+              const level25Result = limitVelocityByLevel(highVelocity, 25);
               
-              if (level11Result !== highVelocity) {
-                throw new Error(`Level 11+ should not limit velocity, expected ${highVelocity}, got ${level11Result}`);
+              if (level20Result !== highVelocity) {
+                throw new Error(`Level 20+ should not limit velocity, expected ${highVelocity}, got ${level20Result}`);
               }
-              if (level15Result !== highVelocity) {
-                throw new Error(`Level 15+ should not limit velocity, expected ${highVelocity}, got ${level15Result}`);
+              if (level25Result !== highVelocity) {
+                throw new Error(`Level 25+ should not limit velocity, expected ${highVelocity}, got ${level25Result}`);
               }
             });
 
             it("should preserve velocity sign when limiting", function () {
-              const negativeOver = limitVelocityByLevel(-200, 2); // Should be -125
-              const positiveOver = limitVelocityByLevel(200, 2); // Should be 125
+              const negativeOver = limitVelocityByLevel(-200, 2); // Should be -101.25
+              const positiveOver = limitVelocityByLevel(200, 2); // Should be 101.25
               
-              if (negativeOver !== -125) {
-                throw new Error(`Negative velocity should stay negative, expected -125, got ${negativeOver}`);
+              if (negativeOver !== -101.25) {
+                throw new Error(`Negative velocity should stay negative, expected -101.25, got ${negativeOver}`);
               }
-              if (positiveOver !== 125) {
-                throw new Error(`Positive velocity should stay positive, expected 125, got ${positiveOver}`);
+              if (positiveOver !== 101.25) {
+                throw new Error(`Positive velocity should stay positive, expected 101.25, got ${positiveOver}`);
               }
             });
           });
@@ -3316,8 +3378,9 @@
               }
 
               const acceleration = testState.SHIP_ACCELERATION * deltaTime;
-              const expectedVx = Math.cos(testState.ship.angle) * acceleration;
-              const expectedVy = Math.sin(testState.ship.angle) * acceleration;
+              const dragFactor = 0.99; // Account for drag applied after thrust
+              const expectedVx = Math.cos(testState.ship.angle) * acceleration * dragFactor;
+              const expectedVy = Math.sin(testState.ship.angle) * acceleration * dragFactor;
 
               if (Math.abs(newState.ship.vx - expectedVx) > 0.001) {
                 throw new Error(
@@ -3395,12 +3458,13 @@
 
               const bullet = newState.bullets[0];
 
-              // Expected velocity: ship velocity + bullet speed in ship direction
+              // Expected velocity: ship velocity (after drag) + bullet speed in ship direction
+              const dragFactor = 0.99; // Account for drag applied to ship velocity before bullet creation
               const expectedVx =
-                freshState.ship.vx +
+                (freshState.ship.vx * dragFactor) +
                 Math.cos(freshState.ship.angle) * freshState.BULLET_SPEED;
               const expectedVy =
-                freshState.ship.vy +
+                (freshState.ship.vy * dragFactor) +
                 Math.sin(freshState.ship.angle) * freshState.BULLET_SPEED;
 
               if (Math.abs(bullet.vx - expectedVx) > 0.001) {
@@ -5149,7 +5213,7 @@
                 }
               });
 
-              it("should end Death Blossom after 9 rotations", function () {
+              it("should end Death Blossom after 10 rotations", function () {
                 // Set up test state manually
                 testState.deathBlossomActive = true;
                 testState.deathBlossomStartTime = 1000;
@@ -5162,7 +5226,7 @@
                 updateDeathBlossomState(testState, deltaTime, 1000);
 
                 if (testState.deathBlossomActive) {
-                  throw new Error("Death Blossom should end after 9 rotations");
+                  throw new Error("Death Blossom should end after 10 rotations");
                 }
                 if (testState.deathBlossomStartTime !== 0) {
                   throw new Error("Start time should be reset to 0");
