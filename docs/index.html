@@ -249,6 +249,7 @@
     </div>
 
     <script>
+      // BEGIN_PURE_JS_TEST_SUITE_DO_NOT_REMOVE_OR_ALTER_THIS //
       // Check if we're in test mode (browser) or Node.js environment
       // Use process instead of window check since jsdom provides window in Node.js
       const isNodeJS =
@@ -256,9 +257,62 @@
         process.versions &&
         process.versions.node;
       const urlParams = isNodeJS
-        ? { has: () => true }
+        ? { has: () => true, get: () => null }
         : new URLSearchParams(window.location.search);
       const isTestMode = isNodeJS || urlParams.has("test");
+      
+      // Check for level parameter to initialize game at specific level
+      const levelParam = urlParams.get("level");
+      const initialLevel = levelParam ? parseInt(levelParam, 10) : 1;
+
+      // Check for seed parameter to enable deterministic randomness
+      const seedParam = urlParams.get("seed");
+      const randomSeed = seedParam ? parseInt(seedParam, 10) : Math.floor(Math.random() * 1000000);
+
+      /**
+       * Mulberry32 PRNG - A high-quality, fast pseudorandom number generator
+       * 
+       * Why Mulberry32?
+       * - Excellent statistical properties (passes BigCrush test suite)
+       * - Very fast (only 4 arithmetic operations per call)
+       * - Simple implementation (easy to audit and understand) 
+       * - Widely used in game development and simulations
+       * - Full 32-bit state space with good period length
+       * 
+       * This enables deterministic testing by using a seeded RNG instead of Math.random()
+       * Usage: const rng = createSeededRNG(12345); const value = rng(); // 0 <= value < 1
+       */
+      function createSeededRNG(seed) {
+        let state = seed;
+        return function() {
+          state |= 0; // Ensure 32-bit integer
+          state = state + 0x6D2B79F5 | 0; // Add magic constant, keep 32-bit
+          let t = Math.imul(state ^ state >>> 15, state | 1); // Mix bits
+          t ^= t + Math.imul(t ^ t >>> 7, t | 61); // More mixing
+          return ((t ^ t >>> 14) >>> 0) / 4294967296; // Final mix and normalize to [0,1)
+        };
+      }
+
+      // Create RNG factory function for game state initialization
+      function createRNGState(seed) {
+        let state = seed;
+        return {
+          seed: seed,
+          state: state,
+          next: function() {
+            state |= 0; // Ensure 32-bit integer
+            state = state + 0x6D2B79F5 | 0; // Add magic constant, keep 32-bit
+            let t = Math.imul(state ^ state >>> 15, state | 1); // Mix bits
+            t ^= t + Math.imul(t ^ t >>> 7, t | 61); // More mixing
+            return ((t ^ t >>> 14) >>> 0) / 4294967296; // Final mix and normalize to [0,1)
+          }
+        };
+      }
+      
+      // Print seed for test reproducibility
+      if (isTestMode) {
+        console.log(`[SEED] Using random seed: ${randomSeed} (add ?test&seed=${randomSeed} to reproduce)`);
+      }
 
       // Add test mode toggle with capital T
       let testModeTriggered = false;
@@ -811,7 +865,10 @@
         kidMode: false,
         titleSplashVisible: false,
         titleSplashFrameCount: 0,
-        level: 1, // Current level/wave number
+        level: initialLevel, // Current level/wave number (can be overridden by ?level= parameter)
+
+        // Random number generator state (deterministic for testing)
+        rng: createRNGState(randomSeed),
 
         // Death Blossom state (mobile-only secret feature)
         deathBlossomActive: false,
@@ -1555,7 +1612,7 @@
         if (
           debugElement &&
           debugElement.style.display !== "none" &&
-          Math.random() < 0.1
+          state.rng.next() < 0.1
         ) {
           // Update occasionally when visible
           debugElement.innerHTML = `
@@ -1574,8 +1631,8 @@
           state.stars = [];
           for (let i = 0; i < 100; i++) {
             state.stars.push({
-              x: Math.floor(Math.random() * GAME_WIDTH),
-              y: Math.floor(Math.random() * GAME_HEIGHT),
+              x: Math.floor(state.rng.next() * GAME_WIDTH),
+              y: Math.floor(state.rng.next() * GAME_HEIGHT),
             });
           }
         }
@@ -1590,11 +1647,11 @@
             ctx.save();
             ctx.globalAlpha = 0.3; // Semi-transparent
             ctx.strokeStyle = "#666"; // Grey color
-            drawShip(ctx, state.ship);
+            drawShip(ctx, state.ship, state);
             ctx.restore();
           } else {
             // Draw normal ship
-            drawShip(ctx, state.ship);
+            drawShip(ctx, state.ship, state);
           }
         }
 
@@ -1872,7 +1929,7 @@
         ctx.restore();
       }
 
-      function drawShip(ctx, ship) {
+      function drawShip(ctx, ship, state) {
         ctx.save();
         ctx.translate(ship.x, ship.y);
         ctx.rotate(ship.angle);
@@ -1895,7 +1952,7 @@
           ctx.strokeStyle = "#ff8800"; // Orange color
           ctx.beginPath();
           ctx.moveTo(scale(-5), scale(-3));
-          ctx.lineTo(scale(-15 * Math.random() - 10), 0);
+          ctx.lineTo(scale(-15 * state.rng.next() - 10), 0);
           ctx.lineTo(scale(-5), scale(3));
           ctx.stroke();
           ctx.strokeStyle = "#fff"; // Reset to white for ship outline
@@ -2174,6 +2231,7 @@
           BULLET_SPEED: state.BULLET_SPEED,
           ASTEROID_SPAWN_COUNT: state.ASTEROID_SPAWN_COUNT,
           DEATH_BLOSSOM_ROTATION_COUNT: state.DEATH_BLOSSOM_ROTATION_COUNT,
+          rng: state.rng, // Preserve RNG state
         };
 
         // Check if ship explosion should end
@@ -2553,8 +2611,7 @@
           newState.ship.vy = 0;
           
           if (isSpawnAreaClear(newState.asteroids, spawnX, spawnY, safeRadius)) {
-            // Safe to respawn - ship is already positioned
-            newState.ship.angle = -Math.PI / 2;
+            // Safe to respawn - ship is already positioned and retains its current angle
             newState.waitingForRespawn = false;
 
             // Reset Death Blossom availability for new ship life
@@ -2576,15 +2633,15 @@
         const particlesToAdd = Math.min(20, MAX_PARTICLES - state.particles.length);
         
         for (let i = 0; i < particlesToAdd; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 50 + Math.random() * 150;
+          const angle = state.rng.next() * Math.PI * 2;
+          const speed = 50 + state.rng.next() * 150;
 
           state.particles.push({
             x: x,
             y: y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: 30 + Math.floor(Math.random() * 20),
+            life: 30 + Math.floor(state.rng.next() * 20),
           });
         }
       }
@@ -2633,16 +2690,16 @@
         state.shipDebris = [];
 
         shipPieces.forEach((piece, i) => {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 80 + Math.random() * 120;
+          const angle = state.rng.next() * Math.PI * 2;
+          const speed = 80 + state.rng.next() * 120;
           const debris = {
             points: piece.points.map((p) => [...p]), // Deep copy points
             x: shipX,
             y: shipY,
             vx: shipVx + Math.cos(angle) * speed,
             vy: shipVy + Math.sin(angle) * speed,
-            angle: Math.random() * Math.PI * 2,
-            angularVelocity: (Math.random() - 0.5) * 8, // Random spin
+            angle: state.rng.next() * Math.PI * 2,
+            angularVelocity: (state.rng.next() - 0.5) * 8, // Random spin
             life: 120, // 2 seconds at 60fps
             mass: piece.mass,
           };
@@ -2651,15 +2708,15 @@
 
         // Add extra explosion particles for more drama
         for (let i = 0; i < 40; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 200;
+          const angle = state.rng.next() * Math.PI * 2;
+          const speed = 60 + state.rng.next() * 200;
 
           state.particles.push({
             x: shipX,
             y: shipY,
             vx: shipVx + Math.cos(angle) * speed,
             vy: shipVy + Math.sin(angle) * speed,
-            life: 40 + Math.floor(Math.random() * 30),
+            life: 40 + Math.floor(state.rng.next() * 30),
           });
         }
       }
@@ -2669,31 +2726,31 @@
           let x, y;
           let attempts = 0;
           do {
-            x = Math.random() * GAME_WIDTH;
-            y = Math.random() * GAME_HEIGHT;
+            x = state.rng.next() * GAME_WIDTH;
+            y = state.rng.next() * GAME_HEIGHT;
             attempts++;
             // Prevent infinite loop - if we can't find a good spot after 50 attempts, just place it
             if (attempts > 50) break;
           } while (distance({ x, y }, state.ship) < 100);
 
-          const asteroid = createAsteroid(x, y, state.level);
+          const asteroid = createAsteroid(x, y, state.level, state);
           state.asteroids.push(asteroid);
         }
       }
 
-      function createAsteroid(x, y, level = 1) {
-        const baseSize = 20 + Math.random() * 30; // Store base size for scaling
+      function createAsteroid(x, y, level = 1, state) {
+        const baseSize = 20 + state.rng.next() * 30; // Store base size for scaling
         const basePoints = [];
-        const segments = 8 + Math.floor(Math.random() * 4); // Moderate segment count
+        const segments = 8 + Math.floor(state.rng.next() * 4); // Moderate segment count
 
         for (let i = 0; i < segments; i++) {
           // Add some angle jitter to make shapes more irregular
           const baseAngle = (i / segments) * Math.PI * 2;
-          const angleJitter = (Math.random() - 0.5) * 0.15; // Reduced angle jitter
+          const angleJitter = (state.rng.next() - 0.5) * 0.15; // Reduced angle jitter
           const angle = baseAngle + angleJitter;
 
           // Moderate radius variation for natural jaggedness
-          const radiusVariation = baseSize * (0.6 + Math.random() * 0.5); // Range from 0.6x to 1.1x size
+          const radiusVariation = baseSize * (0.6 + state.rng.next() * 0.5); // Range from 0.6x to 1.1x size
 
           basePoints.push([
             Math.cos(angle) * radiusVariation,
@@ -2702,9 +2759,9 @@
         }
 
         // Add fewer, more subtle spikes
-        const spikeCount = Math.floor(Math.random() * 2); // 0-1 extra spikes
+        const spikeCount = Math.floor(state.rng.next() * 2); // 0-1 extra spikes
         for (let spike = 0; spike < spikeCount; spike++) {
-          const insertIndex = Math.floor(Math.random() * basePoints.length);
+          const insertIndex = Math.floor(state.rng.next() * basePoints.length);
           const prevPoint = basePoints[insertIndex];
           const nextPoint = basePoints[(insertIndex + 1) % basePoints.length];
 
@@ -2713,7 +2770,7 @@
             (prevPoint[1] + nextPoint[1]) / 2,
             (prevPoint[0] + nextPoint[0]) / 2,
           );
-          const spikeRadius = baseSize * (0.5 + Math.random() * 0.3); // Less extreme spikes
+          const spikeRadius = baseSize * (0.5 + state.rng.next() * 0.3); // Less extreme spikes
 
           basePoints.splice(insertIndex + 1, 0, [
             Math.cos(midAngle) * spikeRadius,
@@ -2722,14 +2779,14 @@
         }
 
         // Generate initial velocities and ensure they're never too close to zero
-        const initialVx = (Math.random() - 0.5) * 100;
-        const initialVy = (Math.random() - 0.5) * 100;
+        const initialVx = (state.rng.next() - 0.5) * 100;
+        const initialVy = (state.rng.next() - 0.5) * 100;
 
         return {
           x: x,
           y: y,
-          vx: ensureMinimumVelocity(limitVelocityByLevel(initialVx, level)),
-          vy: ensureMinimumVelocity(limitVelocityByLevel(initialVy, level)),
+          vx: ensureMinimumVelocity(limitVelocityByLevel(initialVx, level), 15, state),
+          vy: ensureMinimumVelocity(limitVelocityByLevel(initialVy, level), 15, state),
           baseRadius: baseSize, // Store base radius for scaling
           get radius() {
             return scale(this.baseRadius);
@@ -2743,7 +2800,7 @@
             ]);
           },
           angle: 0,
-          angularVelocity: (Math.random() - 0.5) * 2, // radians per second
+          angularVelocity: (state.rng.next() - 0.5) * 2, // radians per second
         };
       }
 
@@ -2765,12 +2822,12 @@
       }
 
       // Ensure velocity is never too close to zero to prevent border sticking
-      function ensureMinimumVelocity(velocity, minVelocity = 15) {
+      function ensureMinimumVelocity(velocity, minVelocity = 15, state) {
         const absVel = Math.abs(velocity);
         if (absVel < minVelocity) {
           if (velocity === 0) {
             // If exactly zero, assign random sign
-            return (Math.random() < 0.5 ? -1 : 1) * minVelocity;
+            return (state.rng.next() < 0.5 ? -1 : 1) * minVelocity;
           } else {
             // Preserve sign but enforce minimum magnitude
             return (velocity < 0 ? -1 : 1) * minVelocity;
@@ -2817,9 +2874,10 @@
 
           for (let k = 0; k < 2; k++) {
             const smallAsteroid = createAsteroid(
-              asteroid.x + (Math.random() - 0.5) * 40,
-              asteroid.y + (Math.random() - 0.5) * 40,
+              asteroid.x + (gameState.rng.next() - 0.5) * 40,
+              asteroid.y + (gameState.rng.next() - 0.5) * 40,
               gameState.level,
+              gameState
             );
 
             // Rescale the base points from the randomly generated size to the desired smaller size
@@ -2839,17 +2897,21 @@
 
             smallAsteroid.vx = ensureMinimumVelocity(
               limitVelocityByLevel(
-                asteroid.vx + (Math.random() - 0.5) * velocityBoost,
+                asteroid.vx + (gameState.rng.next() - 0.5) * velocityBoost,
                 gameState.level
-              )
+              ),
+              15,
+              gameState
             );
             smallAsteroid.vy = ensureMinimumVelocity(
               limitVelocityByLevel(
-                asteroid.vy + (Math.random() - 0.5) * velocityBoost,
+                asteroid.vy + (gameState.rng.next() - 0.5) * velocityBoost,
                 gameState.level
-              )
+              ),
+              15,
+              gameState
             );
-            smallAsteroid.angularVelocity = (Math.random() - 0.5) * 4;
+            smallAsteroid.angularVelocity = (gameState.rng.next() - 0.5) * 4;
 
             result.newAsteroids.push(smallAsteroid);
           }
@@ -2905,6 +2967,7 @@
         GameState.deathBlossomTotalAngleRotated =
           newState.deathBlossomTotalAngleRotated;
         GameState.deathBlossomAvailable = newState.deathBlossomAvailable;
+        GameState.rng = newState.rng;
         render(GameState);
 
         requestAnimationFrame(gameLoop);
@@ -2940,7 +3003,10 @@
         GameState.waitingForRespawn = false;
         GameState.lastFireTime = 0;
         GameState.autoFire = false;
-        GameState.level = 1; // Reset to level 1 on game restart
+        GameState.level = initialLevel; // Reset to initial level (from URL param or default 1)
+
+        // Reset RNG state to initial seed
+        GameState.rng = createRNGState(randomSeed);
 
         // Reset Death Blossom state
         GameState.deathBlossomActive = false;
@@ -2953,8 +3019,13 @@
         GameState.titleSplashVisible = true;
         GameState.titleSplashFrameCount = 0;
 
-        // Spawn initial asteroids
-        spawnAsteroids(GameState, 5);
+        // Spawn initial asteroids based on level (progressive difficulty)
+        const asteroidsToSpawn = GameState.ASTEROID_SPAWN_COUNT + (GameState.level - 1);
+        spawnAsteroids(GameState, asteroidsToSpawn);
+        
+        // Update level display
+        const levelElement = document.getElementById("levelValue");
+        if (levelElement) levelElement.textContent = GameState.level;
       }
 
       /* TEST INFRASTRUCTURE: Deep Copy for Immutable State Snapshots
@@ -3016,6 +3087,8 @@
           deathBlossomRotations: state.deathBlossomRotations,
           deathBlossomTotalAngleRotated: state.deathBlossomTotalAngleRotated,
           deathBlossomAvailable: state.deathBlossomAvailable,
+          // Copy RNG state (create new instance with same internal state)
+          rng: state.rng ? createRNGState(state.rng.seed) : createRNGState(randomSeed),
           // Copy constants that might be used in tests
           SHIP_ACCELERATION: state.SHIP_ACCELERATION,
           ROTATION_SPEED: state.ROTATION_SPEED,
@@ -3028,6 +3101,20 @@
 
       // Test Suite
       if (isTestMode) {
+        // Helper function to create test state with RNG
+        function createTestState(overrides = {}) {
+          return {
+            rng: createRNGState(12345),
+            ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: -Math.PI / 2, get radius() { return scale(10); } },
+            asteroids: [],
+            bullets: [],
+            particles: [],
+            shipDebris: [],
+            sound: new MockSoundInterface(),
+            ...overrides
+          };
+        }
+
         // Test framework with browser as the single source of truth
         let testFailures = 0;
         let testTotal = 0;
@@ -3179,7 +3266,8 @@
 
           describe("Asteroid Creation", function () {
             it("should create asteroid with correct properties", function () {
-              const asteroid = createAsteroid(100, 200);
+              const testState = { rng: createRNGState(12345) };
+              const asteroid = createAsteroid(100, 200, 1, testState);
               const scaleFactor = calculateScaleFactor();
 
               if (asteroid.x !== 100)
@@ -3220,8 +3308,10 @@
             });
 
             it("should create asteroids with different shapes", function () {
-              const asteroid1 = createAsteroid(0, 0);
-              const asteroid2 = createAsteroid(0, 0);
+              const testState1 = { rng: createRNGState(12345) };
+              const testState2 = { rng: createRNGState(54321) };
+              const asteroid1 = createAsteroid(0, 0, 1, testState1);
+              const asteroid2 = createAsteroid(0, 0, 1, testState2);
 
               // Check that points are different (randomized)
               let identical = true;
@@ -3251,7 +3341,8 @@
             it("should enforce minimum velocity to prevent border sticking", function () {
               // Test many asteroids to ensure none have near-zero velocities
               for (let i = 0; i < 50; i++) {
-                const asteroid = createAsteroid(100, 200);
+                const testState = { rng: createRNGState(12345 + i) };
+                const asteroid = createAsteroid(100, 200, 1, testState);
 
                 if (Math.abs(asteroid.vx) < 15) {
                   throw new Error(
@@ -3339,7 +3430,8 @@
             });
 
             it("should handle exactly zero velocity with random sign", function () {
-              const result = ensureMinimumVelocity(0, 15);
+              const testState = { rng: createRNGState(12345) };
+              const result = ensureMinimumVelocity(0, 15, testState);
               if (Math.abs(result) !== 15) {
                 throw new Error(`Expected absolute value of 15, got ${result}`);
               }
@@ -3377,7 +3469,7 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -3387,10 +3479,6 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -3405,7 +3493,7 @@
                 BULLET_SPEED: 500,
                 ASTEROID_SPAWN_COUNT: 5,
                 sound: new MockSoundInterface(),
-              };
+              });
             });
 
             it("should update ship rotation with left arrow", function () {
@@ -3711,7 +3799,7 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -3721,10 +3809,6 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -3736,7 +3820,7 @@
                 ROTATION_SPEED: 5,
                 BULLET_SPEED: 500,
                 sound: new MockSoundInterface(),
-              };
+              });
             });
 
             it("should wrap ship horizontally", function () {
@@ -3794,7 +3878,7 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -3804,10 +3888,6 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -3819,25 +3899,16 @@
                 ROTATION_SPEED: 5,
                 BULLET_SPEED: 500,
                 sound: new MockSoundInterface(),
-              };
+              });
             });
 
             it("should detect bullet-asteroid collision", function () {
               testState.bullets = [
                 { x: 100, y: 100, vx: 0, vy: 0, distanceTraveled: 0 },
               ];
-              testState.asteroids = [
-                {
-                  x: 100,
-                  y: 100,
-                  radius: 20,
-                  vx: 0,
-                  vy: 0,
-                  angle: 0,
-                  angularVelocity: 0,
-                  points: [],
-                },
-              ];
+              const asteroid = createAsteroid(100, 100, 1, testState);
+              asteroid.baseRadius = 20; // Override to control size
+              testState.asteroids = [asteroid];
 
               const newState = updateGameState(testState, {}, 0.1, 0);
 
@@ -3854,12 +3925,9 @@
               testState.bullets = [
                 { x: 100, y: 100, vx: 0, vy: 0, distanceTraveled: 0 },
               ];
-              testState.asteroids = [
-                {
-                  x: 100, y: 100, radius: 40, baseRadius: 40, // Large asteroid that will split
-                  vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [], basePoints: []
-                },
-              ];
+              const asteroid = createAsteroid(100, 100, 1, testState);
+              asteroid.baseRadius = 40; // Make it large so it will split
+              testState.asteroids = [asteroid];
 
               const newState = updateGameState(testState, {}, 0.1, 0);
 
@@ -3881,10 +3949,9 @@
               // Test that the momentum transfer code exists and handles different sizes
               // Small asteroid that gets destroyed
               testState.bullets = [{ x: 100, y: 100, vx: 0, vy: 0, distanceTraveled: 0 }];
-              testState.asteroids = [{
-                x: 100, y: 100, radius: 15, baseRadius: 15, // Small asteroid - will be destroyed
-                vx: 0, vy: 0, angle: 0, angularVelocity: 0, points: [], basePoints: []
-              }];
+              const smallAsteroid = createAsteroid(100, 100, 1, testState);
+              smallAsteroid.baseRadius = 15; // Small asteroid - will be destroyed
+              testState.asteroids = [smallAsteroid];
 
               const result = updateGameState(testState, {}, 0.1, 0);
 
@@ -3904,7 +3971,8 @@
               testState.bullets = [
                 { x: 100, y: 100, vx: 0, vy: 0, distanceTraveled: 0 },
               ];
-              testState.asteroids = [createAsteroid(100, 100)];
+              const asteroidState = { rng: createRNGState(12345) };
+              testState.asteroids = [createAsteroid(100, 100, 1, asteroidState)];
               // Ensure it's large enough to split
               testState.asteroids[0].baseRadius = 40;
               const originalRadius = testState.asteroids[0].radius;
@@ -3944,8 +4012,9 @@
               const scaleFactor = calculateScaleFactor();
 
               // Use a large asteroid that should split when hit by ship
+              const asteroidState = { rng: createRNGState(12345) };
               testState.asteroids = [
-                createAsteroid(GAME_WIDTH / 2, GAME_HEIGHT / 2),
+                createAsteroid(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1, asteroidState),
               ];
               // Ensure it's large enough to split
               testState.asteroids[0].baseRadius = 30;
@@ -3991,18 +4060,9 @@
 
             it("should remove small asteroids when hit by ship without splitting", function () {
               // Use a small asteroid that should not split
-              testState.asteroids = [
-                {
-                  x: GAME_WIDTH / 2,
-                  y: GAME_HEIGHT / 2,
-                  radius: 15,
-                  vx: 0,
-                  vy: 0,
-                  angle: 0,
-                  angularVelocity: 0,
-                  points: [],
-                },
-              ];
+              const asteroid = createAsteroid(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1, testState);
+              asteroid.baseRadius = 15;
+              testState.asteroids = [asteroid];
               const initialLives = testState.lives;
 
               const newState = updateGameState(testState, {}, 0.1, 0);
@@ -4025,18 +4085,9 @@
 
             it("should trigger explosion when lives reach zero but delay game over", function () {
               testState.lives = 1;
-              testState.asteroids = [
-                {
-                  x: GAME_WIDTH / 2,
-                  y: GAME_HEIGHT / 2,
-                  radius: 20,
-                  vx: 0,
-                  vy: 0,
-                  angle: 0,
-                  angularVelocity: 0,
-                  points: [],
-                },
-              ];
+              const asteroid = createAsteroid(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1, testState);
+              asteroid.baseRadius = 20;
+              testState.asteroids = [asteroid];
 
               const newState = updateGameState(testState, {}, 0.1, 1000);
 
@@ -4059,7 +4110,7 @@
 
           describe("Particle System", function () {
             it("should create explosion particles", function () {
-              const testState = { particles: [] };
+              const testState = createTestState({ particles: [] });
               createExplosion(testState, 100, 200);
 
               if (testState.particles.length !== 20) {
@@ -4091,10 +4142,10 @@
 
           describe("Asteroid Spawning", function () {
             it("should spawn asteroids away from ship", function () {
-              const testState = {
+              const testState = createTestState({
                 ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 },
                 asteroids: [],
-              };
+              });
 
               spawnAsteroids(testState, 3);
 
@@ -4115,7 +4166,7 @@
             });
 
             it("should spawn new asteroids when none remain", function () {
-              const testState = {
+              const testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -4125,10 +4176,6 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -4139,7 +4186,7 @@
                 level: 1, // Add missing level property
                 ASTEROID_SPAWN_COUNT: 5,
                 sound: new MockSoundInterface(),
-              };
+              });
 
               const newState = updateGameState(testState, {}, 0.1, 0);
 
@@ -4163,7 +4210,7 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -4173,10 +4220,6 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -4188,7 +4231,7 @@
                 ROTATION_SPEED: 5,
                 BULLET_SPEED: 500,
                 sound: new MockSoundInterface(),
-              };
+              });
             });
 
             it("should record thrust sound when ship is thrusting", function () {
@@ -4386,7 +4429,7 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: {
                   x: GAME_WIDTH / 2,
                   y: GAME_HEIGHT / 2,
@@ -4396,14 +4439,10 @@
                   radius: 10,
                   thrusting: false,
                 },
-                asteroids: [],
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
-                lives: 1,
+                lives: 1, // Only 1 life left
                 gameOver: false,
-                paused: false, // Only 1 life left
+                paused: false,
                 shipExploding: false,
                 shipExplosionStartTime: 0,
                 lastFireTime: 0,
@@ -4411,7 +4450,7 @@
                 ROTATION_SPEED: 5,
                 BULLET_SPEED: 500,
                 sound: new MockSoundInterface(),
-              };
+              });
             });
 
             it("should delay game over until ship explosion completes", function () {
@@ -5055,12 +5094,9 @@
           describe("Progressive Difficulty System", () => {
             it("should increase asteroid count by 1 after each screen clear", () => {
               // Setup: Start with level 1 and clear all asteroids
-              const testState = {
+              const testState = createTestState({
                 ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: -Math.PI / 2 },
                 asteroids: [], // No asteroids (screen cleared)
-                bullets: [],
-                particles: [],
-                shipDebris: [],
                 score: 0,
                 lives: 3,
                 gameOver: false,
@@ -5079,7 +5115,7 @@
                 ROTATION_SPEED: 5,
                 BULLET_SPEED: 500,
                 ASTEROID_SPAWN_COUNT: 5,
-              };
+              });
 
               // Test: Update game state when no asteroids remain
               const newState = updateGameState(testState, {}, 16, 1000);
@@ -5137,9 +5173,8 @@
             let testState;
 
             beforeEach(function () {
-              testState = {
+              testState = createTestState({
                 ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, angle: 0, vx: 0, vy: 0 },
-                bullets: [],
                 deathBlossomActive: false,
                 deathBlossomStartTime: 0,
                 deathBlossomRotations: 0,
@@ -5153,7 +5188,7 @@
                 },
                 gameOver: false,
                 shipExploding: false,
-              };
+              });
             });
 
             describe("activateDeathBlossom", function () {
@@ -5498,12 +5533,8 @@
               it("should override ship rotation during Death Blossom", function () {
                 const currentTime = 1000; // Use same time as start time to avoid timing issues
                 const deltaTime = 0.5; // Use larger deltaTime for clearer results
-                const initialState = {
+                const initialState = createTestState({
                   ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, angle: 0, vx: 0, vy: 0 },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [],
-                  shipDebris: [],
                   deathBlossomActive: true,
                   deathBlossomStartTime: currentTime,
                   deathBlossomRotations: 0,
@@ -5523,7 +5554,7 @@
                   ROTATION_SPEED: 5,
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                };
+                });
 
                 const keysPressed = { ArrowLeft: true }; // Try to rotate left
                 const initialAngle = initialState.ship.angle; // Should be 0
@@ -5549,12 +5580,8 @@
 
               it("should fire at high rate during Death Blossom regardless of key presses", function () {
                 const currentTime = 1000; // Use same time as start time to avoid duration issues
-                const initialState = {
+                const initialState = createTestState({
                   ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, angle: 0, vx: 0, vy: 0 },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [],
-                  shipDebris: [],
                   deathBlossomActive: true,
                   deathBlossomStartTime: currentTime,
                   deathBlossomRotations: 0,
@@ -5574,7 +5601,7 @@
                   ROTATION_SPEED: 5,
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                };
+                });
 
                 const keysPressed = {}; // No keys pressed
                 const result = updateGameState(
@@ -5637,18 +5664,14 @@
 
               it("should reset Death Blossom availability on ship respawn - comprehensive test", function () {
                 // Test the full cycle: use Death Blossom -> die -> respawn -> should be available again
-                let state = {
+                let state = createTestState({
                   ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, angle: 0, vx: 0, vy: 0 },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [],
-                  shipDebris: [],
                   deathBlossomActive: false,
                   deathBlossomStartTime: 0,
                   deathBlossomRotations: 0,
                   deathBlossomTotalAngleRotated: 0,
                   deathBlossomAvailable: true, // Initially available
-                    gameOver: false,
+                  gameOver: false,
                   paused: false,
                   shipExploding: false,
                   shipExplosionStartTime: 0,
@@ -5665,7 +5688,7 @@
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                   DEATH_BLOSSOM_ROTATION_COUNT: 3,
-                };
+                });
 
                 // Step 1: Use Death Blossom (should make it unavailable)
                 state = activateDeathBlossom(state, 1000);
@@ -5680,21 +5703,25 @@
                 state.shipExplosionStartTime = 2000;
                 state.lives--; // Lose a life
                 state.deathBlossomActive = false; // Death Blossom ends when ship dies
+                state.waitingForRespawn = false; // Ensure we start in correct state
 
-                // Step 3: Simulate explosion ending and ship respawn
+                // Step 3: Simulate explosion ending and ship respawn (no asteroids = immediate respawn)
                 const respawnTime = 2000 + 2100; // 2.1 seconds after explosion
                 const result = updateGameState(state, {}, 0.016, respawnTime);
 
-                // Step 4: Verify Death Blossom is available again
-                if (!result.deathBlossomAvailable) {
-                  throw new Error(
-                    `Death Blossom should be available after respawn. Lives: ${result.lives}, Exploding: ${result.shipExploding}, Available: ${result.deathBlossomAvailable}`,
-                  );
-                }
-
-                // Verify ship respawned properly
+                // Verify ship respawned properly (not exploding, not waiting)
                 if (result.shipExploding) {
                   throw new Error("Ship should not be exploding after respawn");
+                }
+                if (result.waitingForRespawn) {
+                  throw new Error("Ship should not be waiting for respawn with no asteroids");
+                }
+
+                // Step 4: Verify Death Blossom is available again (only after full respawn)
+                if (!result.deathBlossomAvailable) {
+                  throw new Error(
+                    `Death Blossom should be available after respawn. Lives: ${result.lives}, Exploding: ${result.shipExploding}, WaitingForRespawn: ${result.waitingForRespawn}, Available: ${result.deathBlossomAvailable}`,
+                  );
                 }
                 if (result.lives !== 2) {
                   throw new Error(
@@ -5706,7 +5733,7 @@
               it("should stop Death Blossom and reset availability when ship dies during Death Blossom", function () {
                 const shipX = GAME_WIDTH / 2;
                 const shipY = GAME_HEIGHT / 2;
-                const initialState = {
+                const initialState = createTestState({
                   ship: { 
                     x: shipX, 
                     y: shipY, 
@@ -5715,10 +5742,6 @@
                     vy: 0, 
                     get radius() { return scale(10); }
                   },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [{ x: shipX, y: shipY, radius: scale(20), vx: 0, vy: 0 }], // Asteroid at same position as ship
-                  shipDebris: [],
                   deathBlossomActive: true, // Death Blossom is active when ship dies
                   deathBlossomStartTime: 1000,
                   deathBlossomRotations: 1,
@@ -5742,7 +5765,12 @@
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                   DEATH_BLOSSOM_ROTATION_COUNT: 3,
-                };
+                });
+
+                // Create proper asteroid at same position as ship
+                const asteroid = createAsteroid(shipX, shipY, 1, initialState);
+                asteroid.baseRadius = 20;
+                initialState.asteroids = [asteroid];
 
                 // Ship collides with asteroid - should stop Death Blossom and start explosion
                 const collisionTime = 2000;
@@ -5788,18 +5816,14 @@
               });
 
               it("should reset Death Blossom availability on ship respawn", function () {
-                const initialState = {
+                const initialState = createTestState({
                   ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, angle: 0, vx: 0, vy: 0 },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [],
-                  shipDebris: [],
                   deathBlossomActive: false,
                   deathBlossomStartTime: 0,
                   deathBlossomRotations: 0,
                   deathBlossomTotalAngleRotated: 0,
                   deathBlossomAvailable: false, // Death Blossom was used on previous life
-                    gameOver: false,
+                  gameOver: false,
                   paused: false,
                   shipExploding: true, // Ship is exploding
                   shipExplosionStartTime: 1000,
@@ -5816,7 +5840,7 @@
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                   DEATH_BLOSSOM_ROTATION_COUNT: 3,
-                };
+                });
 
                 // Simulate ship explosion ending after 2 seconds, which should respawn ship
                 const currentTime = 1000 + 2100; // 2.1 seconds after explosion start
@@ -5856,7 +5880,7 @@
 
               it("should disable thrust control during Death Blossom", function () {
                 const currentTime = 1000;
-                const initialState = {
+                const initialState = createTestState({
                   ship: {
                     x: 400,
                     y: 300,
@@ -5865,10 +5889,6 @@
                     vy: 0,
                     thrusting: false,
                   },
-                  bullets: [],
-                  particles: [],
-                  asteroids: [],
-                  shipDebris: [],
                   deathBlossomActive: true,
                   deathBlossomStartTime: currentTime,
                   deathBlossomRotations: 0,
@@ -5889,7 +5909,7 @@
                   ROTATION_SPEED: 5,
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                };
+                });
 
                 const keysPressed = { ArrowUp: true }; // Try to thrust
                 const initialVelocity = {
@@ -5991,25 +6011,11 @@
           describe("Extra Life System", function () {
             it("should award extra life via bullet-asteroid collision at first threshold", function () {
               // Set up game state just below the first 20,000 point threshold
-              const testState = {
+              const testState = createTestState({
                 ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, get radius() { return scale(10); } },
                 bullets: [
                   { x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 },
                 ], // Overlapping with asteroid
-                asteroids: [
-                  {
-                    x: 200,
-                    y: 200,
-                    radius: 20,
-                    vx: 0,
-                    vy: 0,
-                    angle: 0,
-                    angularVelocity: 0,
-                    points: [],
-                  },
-                ], // Large asteroid for 100 points
-                particles: [],
-                shipDebris: [],
                 score: 19950, // Just 50 points below threshold
                 lives: 3,
                 nextExtraLifeScore: 20000,
@@ -6022,7 +6028,11 @@
                 autoFire: false,
                 kidMode: false,
                 sound: new MockSoundInterface(),
-              };
+              });
+              // Create proper asteroid
+              const asteroid = createAsteroid(200, 200, 1, testState);
+              asteroid.baseRadius = 20;
+              testState.asteroids = [asteroid];
 
               // Update game state - collision should award 100 points and trigger extra life
               const result = updateGameState(testState, {}, 0.016, 1000);
@@ -6068,25 +6078,11 @@
             });
 
             it("should not award extra life when not crossing threshold", function () {
-              const testState = {
+              const testState = createTestState({
                 ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, get radius() { return scale(10); } },
                 bullets: [
                   { x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 },
                 ],
-                asteroids: [
-                  {
-                    x: 200,
-                    y: 200,
-                    radius: 20,
-                    vx: 0,
-                    vy: 0,
-                    angle: 0,
-                    angularVelocity: 0,
-                    points: [],
-                  },
-                ],
-                particles: [],
-                shipDebris: [],
                 score: 15000, // Well below threshold
                 lives: 3,
                 nextExtraLifeScore: 20000,
@@ -6099,7 +6095,11 @@
                 autoFire: false,
                 kidMode: false,
                 sound: new MockSoundInterface(),
-              };
+              });
+              // Create proper asteroid
+              const asteroid = createAsteroid(200, 200, 1, testState);
+              asteroid.baseRadius = 20;
+              testState.asteroids = [asteroid];
 
               const result = updateGameState(testState, {}, 0.016, 1000);
 
@@ -6127,25 +6127,11 @@
             });
 
             it("should award second extra life at 40,000 points", function () {
-              const testState = {
+              const testState = createTestState({
                 ship: { x: 100, y: 100, vx: 0, vy: 0, angle: 0, get radius() { return scale(10); } },
                 bullets: [
                   { x: 200, y: 200, vx: 0, vy: 0, distanceTraveled: 0 },
                 ],
-                asteroids: [
-                  {
-                    x: 200,
-                    y: 200,
-                    radius: 20,
-                    vx: 0,
-                    vy: 0,
-                    angle: 0,
-                    angularVelocity: 0,
-                    points: [],
-                  },
-                ],
-                particles: [],
-                shipDebris: [],
                 score: 39950, // Just below second threshold
                 lives: 4, // Already got first extra life
                 nextExtraLifeScore: 40000, // Next threshold is 40k
@@ -6158,7 +6144,11 @@
                 autoFire: false,
                 kidMode: false,
                 sound: new MockSoundInterface(),
-              };
+              });
+              // Create proper asteroid
+              const asteroid = createAsteroid(200, 200, 1, testState);
+              asteroid.baseRadius = 20;
+              testState.asteroids = [asteroid];
 
               const result = updateGameState(testState, {}, 0.016, 1000);
 
@@ -6838,6 +6828,49 @@
                 throw new Error(`Ship should still be waiting for respawn when spawn area is blocked. WaitingForRespawn: ${newState.waitingForRespawn}, asteroids: ${newState.asteroids.length}`);
               }
             });
+
+            it("should retain ship direction when respawning after waiting", function () {
+              // Set up ship waiting for respawn with a specific angle (not default -Math.PI/2)
+              const customAngle = Math.PI / 4; // 45 degrees (different from default upward direction)
+              const baseState = {
+                ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: customAngle, radius: 10, thrusting: false },
+                shipExploding: false,
+                waitingForRespawn: true,
+                lives: 2,
+                gameOver: false,
+                paused: false,
+                asteroids: [], // No asteroids blocking spawn - will allow immediate respawn
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                lastFireTime: 0,
+                deathBlossomActive: false,
+                deathBlossomAvailable: false,
+                deathBlossomStartTime: 0,
+                deathBlossomRotations: 0,
+                deathBlossomTotalAngleRotated: 0,
+                titleSplashVisible: false,
+                titleSplashFrameCount: 0,
+                sound: new MockSoundInterface(),
+                ROTATION_SPEED: 5,
+                SHIP_ACCELERATION: 300,
+                BULLET_SPEED: 500,
+                level: 1,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              const newState = updateGameState(baseState, {}, 16.67, 1000);
+
+              // Ship should no longer be waiting for respawn
+              if (newState.waitingForRespawn) {
+                throw new Error("Ship should no longer be waiting for respawn when spawn area is clear");
+              }
+
+              // Ship should retain the custom angle, not reset to default -Math.PI/2
+              if (newState.ship.angle !== customAngle) {
+                throw new Error(`Ship should retain its angle during respawn. Expected: ${customAngle}, got: ${newState.ship.angle}`);
+              }
+            });
           });
         });
 
@@ -6853,7 +6886,9 @@
           }
           console.log("\nAll tests completed!");
         }
-      } else {
+      }
+      // END_PURE_JS_TEST_SUITE_DO_NOT_REMOVE_OR_ALTER_THIS //
+      else {
         // Start the game normally
         restartGame();
         requestAnimationFrame(gameLoop);

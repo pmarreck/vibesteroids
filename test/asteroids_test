@@ -99,16 +99,22 @@ if (global.HTMLCanvasElement) {
 const htmlFile = path.join(__dirname, '..', 'src', 'asteroids.html');
 const htmlContent = fs.readFileSync(htmlFile, 'utf8');
 
-// Extract JavaScript code between <script> tags (excluding CDN script)
-const scriptMatches = htmlContent.match(/<script>[\s\S]*?<\/script>/g);
-if (!scriptMatches) {
-    console.error('No JavaScript code found in HTML file');
+// Extract JavaScript code between clear delimiters
+const beginMarker = '// BEGIN_PURE_JS_TEST_SUITE_DO_NOT_REMOVE_OR_ALTER_THIS //';
+const endMarker = '// END_PURE_JS_TEST_SUITE_DO_NOT_REMOVE_OR_ALTER_THIS //';
+
+const beginIndex = htmlContent.indexOf(beginMarker);
+const endIndex = htmlContent.indexOf(endMarker);
+
+if (beginIndex === -1 || endIndex === -1) {
+    console.error('Test suite delimiters not found in HTML file');
+    console.error('Looking for:', beginMarker);
+    console.error('And:', endMarker);
     process.exit(1);
 }
 
-// Get the main script (should be the last and largest one)
-const mainScript = scriptMatches[scriptMatches.length - 1];
-const jsCode = mainScript.replace(/<\/?script>/g, '');
+// Extract everything between the delimiters (including the delimiters for clarity)
+const jsCode = htmlContent.substring(beginIndex, endIndex + endMarker.length);
 
 // Set up global Math object for Node.js compatibility
 global.Math = Math;
