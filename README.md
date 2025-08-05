@@ -23,7 +23,7 @@ This project was an experiment in **100% "vibe coding"** - an emerging developme
 ## Quick Start
 
 ### Web Version
-Simply open `src/asteroids.html` in any modern web browser, or visit the [live demo](https://pmarreck.github.io/vibesteroids/) hosted on GitHub Pages.
+Simply open `src/vibesteroids.html` in any modern web browser, or visit the [live demo](https://pmarreck.github.io/vibesteroids/) hosted on GitHub Pages.
 
 ### Command Line (Unix-like systems)
 ```bash
@@ -42,7 +42,7 @@ For Nix users, this project includes a flake for a reproducible development envi
 nix develop
 
 # Or run commands directly
-nix develop --command ./test/asteroids_test
+nix develop --command ./test/vibesteroids_test
 ```
 
 ## Game Controls
@@ -95,24 +95,24 @@ The game includes a comprehensive test suite with 108 tests that can be run in b
 ### Running Tests
 
 #### In the Browser
-1. Open `src/asteroids.html?test` in your browser (or type shift-T in the game)
+1. Open `src/vibesteroids.html?test` in your browser (or type shift-T in the game)
 2. Test results will be displayed on the screen
-3. To run with a specific seed for reproducible randomness: `src/asteroids.html?test&seed=12345`
+3. To run with a specific seed for reproducible randomness: `src/vibesteroids.html?test&seed=12345`
 
 #### Command Line (requires Node.js)
 ```bash
 # Make the test file executable if it's not already
-chmod +x test/asteroids_test
+chmod +x test/vibesteroids_test
 
 # Run the test suite
-./test/asteroids_test
+./test/vibesteroids_test
 
 # Run with a specific seed for reproducible test results
-./test/asteroids_test --seed 12345
+./test/vibesteroids_test --seed 12345
 
 # Alternative: use node directly
-node test/asteroids_test
-node test/asteroids_test --seed 12345
+node test/vibesteroids_test
+node test/vibesteroids_test --seed 12345
 ```
 
 *Note: The command-line test runner uses some extraction logic to pull the JavaScript test code out of the HTML file, since the entire test suite is embedded within the single HTML file alongside the game itself.*
@@ -143,16 +143,16 @@ The test suite covers:
 ```
 .
 ├── docs/
-│   └── index.html        # Main game file (HTML/JS/CSS) - served by GitHub Pages
+│   └── index.html         # Main game file (HTML/JS/CSS) - served by GitHub Pages
 ├── src/
-│   └── asteroids.html    # Symlink to ../docs/index.html for local development
+│   └── vibesteroids.html  # Symlink to ../docs/index.html for local development
 ├── test/
-│   └── asteroids_test    # Test runner
-├── asteroids             # POSIX-compliant launcher script
-└── README.md             # This file
+│   └── vibesteroids_test  # Test runner
+├── asteroids              # POSIX-compliant launcher script
+└── README.md              # This file
 ```
 
-*Note: The `src/asteroids.html` is a symbolic link to `docs/index.html` to support both local development and GitHub Pages deployment from the same file.*
+*Note: The `src/vibesteroids.html` is a symbolic link to `docs/index.html` to support both local development and GitHub Pages deployment from the same file.*
 
 ## Contributing
 
@@ -174,7 +174,8 @@ Contributions are welcome! Please ensure all tests pass before submitting a pull
 - **Collision Detection**: Simple circle-based collision system
 
 ### Scoring System
-- **Points per Asteroid**: 100 points each (all sizes)
+- **Large Asteroids** (that split): 80 points each
+- **Small Asteroids** (that don't split): 120 points each
 - **Extra Life**: Awarded every 20,000 points
 - **Death Blossom**: Special ability indicated by ☀️ emoji, one per ship
   - Desktop: Activate with **shift-B**

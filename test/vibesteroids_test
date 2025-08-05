@@ -96,7 +96,7 @@ if (global.HTMLCanvasElement) {
 }
 
 // Read the HTML file
-const htmlFile = path.join(__dirname, '..', 'src', 'asteroids.html');
+const htmlFile = path.join(__dirname, '..', 'src', 'vibesteroids.html');
 const htmlContent = fs.readFileSync(htmlFile, 'utf8');
 
 // Extract JavaScript code between clear delimiters
@@ -142,7 +142,7 @@ global.requestAnimationFrame = function(callback) {
 
 // Execute the JavaScript code - the browser code will handle all test framework setup
 try {
-    console.log('Running Asteroids Game Tests in Node.js\n');
+    console.log('Running Vibesteroids Game Tests in Node.js\n');
     
     eval(jsCode);
     
