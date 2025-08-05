@@ -16,6 +16,9 @@ const dom = new JSDOM(`<!DOCTYPE html><html><body>
     <div id="testModeToggleArea"></div>
     <div id="mobileTutorial"></div>
     <div id="debugInfo"></div>
+    <span id="scoreValue">0</span>
+    <span id="levelValue">1</span>
+    <span id="livesValue">🚀🚀🚀</span>
 </body></html>`, {
     url: 'http://localhost?test',  // Add test parameter to trigger test mode
     pretendToBeVisual: true,

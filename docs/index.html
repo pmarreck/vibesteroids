@@ -45,6 +45,11 @@
         z-index: 10;
         pointer-events: none;
       }
+      .score-level-area {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
 
       .death-blossom-indicator {
         position: absolute;
@@ -144,7 +149,10 @@
   </head>
   <body>
     <div class="game-info">
-      <div>Score: <span id="scoreValue">0</span></div>
+      <div class="score-level-area">
+        <div>Score: <span id="scoreValue">0</span></div>
+        <div>Level: <span id="levelValue">1</span></div>
+      </div>
       <div><span id="livesValue">🚀🚀🚀</span></div>
       <div
         id="debugInfo"
@@ -852,10 +860,10 @@
           return currentRotationSpeed;
         },
         get BULLET_SPEED() {
-          // Level-based bullet speed scaling: 25% slower at level 1, 100% faster at level 20
+          // Level-based bullet speed scaling: 25% slower at level 1, 85% faster at level 20 (reduced from 100%)
           const baseBulletSpeed = 500; // Original base speed
           const minBulletSpeed = baseBulletSpeed * 0.75; // 25% slower (375)
-          const maxBulletSpeed = baseBulletSpeed * 2.0; // 100% faster (1000)
+          const maxBulletSpeed = baseBulletSpeed * 1.85; // 85% faster (925) - reduced by 15% from 1000
           const level = this.level || 1;
           
           if (level >= 20) {
@@ -1603,6 +1611,7 @@
 
         // Update UI elements with dependency injection
         const scoreElement = documentObj.getElementById("scoreValue");
+        const levelElement = documentObj.getElementById("levelValue");
         const livesElement = documentObj.getElementById("livesValue");
         const gameInfoElement = documentObj.querySelector(".game-info");
         const deathBlossomIndicator = documentObj.getElementById(
@@ -1614,6 +1623,7 @@
         } else if (gameInfoElement) {
           gameInfoElement.style.visibility = "visible";
           if (scoreElement) scoreElement.textContent = state.score;
+          if (levelElement) levelElement.textContent = state.level;
           if (livesElement) {
             // Display lives as ship emojis
             const shipEmoji = "🚀";
