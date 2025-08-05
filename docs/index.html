@@ -2437,12 +2437,14 @@
           const dy = bullet.y - oldY;
           bullet.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
 
-          // Screen wrapping for bullets
-          if (bullet.x < 0) bullet.x = GAME_WIDTH;
-          else if (bullet.x > GAME_WIDTH) bullet.x = 0;
+          // Screen wrapping for bullets - allow penetration beyond viewport before wrapping
+          const maxAsteroidRadius = scale(50); // Largest possible asteroid radius
+          const bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
+          if (bullet.x < -bulletBuffer) bullet.x = GAME_WIDTH + bulletBuffer;
+          else if (bullet.x > GAME_WIDTH + bulletBuffer) bullet.x = -bulletBuffer;
 
-          if (bullet.y < 0) bullet.y = GAME_HEIGHT;
-          else if (bullet.y > GAME_HEIGHT) bullet.y = 0;
+          if (bullet.y < -bulletBuffer) bullet.y = GAME_HEIGHT + bulletBuffer;
+          else if (bullet.y > GAME_HEIGHT + bulletBuffer) bullet.y = -bulletBuffer;
 
           // Remove bullet if it has traveled more than half a screen diagonal
           const maxDistance =
@@ -4132,9 +4134,12 @@
             });
 
             it("should wrap bullets", function () {
+              // Test bullet wrapping with asteroid-based buffer zone
+              const maxAsteroidRadius = scale(50); // Largest possible asteroid radius
+              const bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
               testState.bullets = [
                 {
-                  x: -10,
+                  x: -bulletBuffer - 10, // Beyond the buffer zone
                   y: GAME_HEIGHT / 2,
                   vx: 0,
                   vy: 0,
@@ -4142,9 +4147,10 @@
                 },
               ];
               const newState = updateGameState(testState, {}, 0.1, 0);
-              if (newState.bullets[0].x !== GAME_WIDTH) {
+              const expectedX = GAME_WIDTH + bulletBuffer;
+              if (newState.bullets[0].x !== expectedX) {
                 throw new Error(
-                  `Expected bullet x=${GAME_WIDTH}, got ${newState.bullets[0].x}`,
+                  `Expected bullet x=${expectedX}, got ${newState.bullets[0].x}`,
                 );
               }
             });
