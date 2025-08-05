@@ -13,11 +13,11 @@ This project was an experiment in **100% "vibe coding"** - an emerging developme
 ## Features
 
 - 🎮 Classic Asteroids gameplay with smooth controls
-- 🧪 Comprehensive test suite
+- 🧪 Comprehensive test suite (108 tests)
 - 🎨 Pure functional design with immutable state
 - 🔊 Dynamic sound effects
 - 👶 Kid Mode for easier gameplay
-- 🚀 Single HTML file for easy distribution
+- 🚀 **Single HTML file containing everything** - game, tests, and all assets
 - 🛠️ POSIX-compliant launcher script for all Unix-like systems
 
 ## Quick Start
@@ -76,6 +76,7 @@ The game follows a functional architecture with these key principles:
 2. **Pure Functions**: Game logic is implemented as pure functions
 3. **Separation of Concerns**: Clear separation between game logic and rendering
 4. **Testability**: All game logic is easily testable
+5. **Self-Contained**: Everything (game, tests, assets) exists in a single HTML file for maximum portability
 
 ### Core Components
 
@@ -111,6 +112,8 @@ chmod +x test/asteroids_test
 node test/asteroids_test
 node test/asteroids_test --seed 12345
 ```
+
+*Note: The command-line test runner uses some extraction logic to pull the JavaScript test code out of the HTML file, since the entire test suite is embedded within the single HTML file alongside the game itself.*
 
 ### Test Reproducibility
 
