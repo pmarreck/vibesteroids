@@ -7406,8 +7406,17 @@
             it("should reduce safe zone radius by half after 5 seconds of waiting", function () {
               // Create test state with ship waiting for respawn and asteroids blocking spawn
               const waitingStartTime = 1000;
+              const spawnX = GAME_WIDTH / 2;
+              const spawnY = GAME_HEIGHT / 2;
+              
+              // Use scaled dimensions - place asteroid just outside reduced safe zone
+              const baseSafeRadius = scale(96);
+              const reducedSafeRadius = baseSafeRadius / 2;
+              const asteroidRadius = scale(30);
+              const asteroidDistance = reducedSafeRadius + asteroidRadius + scale(5); // Just outside reduced zone
+              
               const testState = {
-                ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: scale(10), thrusting: false },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
@@ -7420,9 +7429,9 @@
                 particles: [],
                 shipDebris: [],
                 asteroids: [{ 
-                  x: GAME_WIDTH / 2 + 80, y: GAME_HEIGHT / 2, // 80 pixels away: blocks full safe zone (96+30=126) but allows reduced zone (48+30=78)
+                  x: spawnX + asteroidDistance, y: spawnY,
                   vx: 0, vy: 0,
-                  baseRadius: 30, radius: 30,
+                  baseRadius: 30, radius: asteroidRadius,
                   basePoints: [[30, 0], [0, 30], [-30, 0], [0, -30]],
                   points: [[30, 0], [0, 30], [-30, 0], [0, -30]],
                   angle: 0, angularVelocity: 0
@@ -7458,8 +7467,14 @@
               const spawnX = GAME_WIDTH / 2;
               const spawnY = GAME_HEIGHT / 2;
               
+              // Use scaled dimensions
+              const bombRadius = scale(80); // 8x ship radius
+              const asteroidRadius = scale(20);
+              const closeDistance = scale(40); // Well within bomb radius
+              const farDistance = bombRadius + asteroidRadius + scale(10); // Outside bomb radius
+              
               const testState = createTestState({
-                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: scale(10), thrusting: false },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
@@ -7467,17 +7482,17 @@
                 score: 100, // Track score to ensure no points awarded
                 asteroids: [
                   { // Close asteroid - should be destroyed
-                    x: spawnX + 40, y: spawnY, 
+                    x: spawnX + closeDistance, y: spawnY, 
                     vx: 0, vy: 0,
-                    baseRadius: 20, radius: 20,
+                    baseRadius: 20, radius: asteroidRadius,
                     basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
                     points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
                     angle: 0, angularVelocity: 0
                   },
                   { // Far asteroid - should survive
-                    x: spawnX + 120, y: spawnY, // 120 pixels away: survives bomb radius (80+20=100)
+                    x: spawnX + farDistance, y: spawnY,
                     vx: 0, vy: 0,
-                    baseRadius: 20, radius: 20,
+                    baseRadius: 20, radius: asteroidRadius,
                     basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
                     points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
                     angle: 0, angularVelocity: 0
