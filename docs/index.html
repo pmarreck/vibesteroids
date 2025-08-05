@@ -4,10 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Asteroids Game</title>
-    <!-- Mobile debugging console -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <!-- Mobile debugging console - only load on mobile devices and not in test mode -->
     <script>
-      eruda.init();
+      // Check if we're on mobile and not in test mode
+      const shouldLoadEruda = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && !window.location.search.includes('test');
+      
+      if (shouldLoadEruda) {
+        // Dynamically load Eruda for mobile debugging
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+        script.onload = function() {
+          eruda.init();
+        };
+        document.head.appendChild(script);
+      }
     </script>
     <style>
       body {

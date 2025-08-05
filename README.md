@@ -50,6 +50,8 @@ nix develop --command ./test/asteroids_test
 - **Arrow Up**: Thrust forward
 - **Arrow Left/Right**: Rotate ship
 - **Space**: Fire weapon
+- **shift-B**: Activate Death Blossom (desktop)
+- **Shake device**: Activate Death Blossom (mobile)
 - **shift-K**: Toggle Kid Mode (no scoring, no deaths)
 - **shift-T**: Run Tests (press Back button to return to game)
 - **esc**: Pause/Resume game
@@ -155,6 +157,34 @@ The test suite covers:
 ## Contributing
 
 Contributions are welcome! Please ensure all tests pass before submitting a pull request.
+
+## Game Mechanics
+
+### Level Progression
+- **Ship Acceleration**: Increases as levels progress
+- **Ship Rotation Speed**: Increases as levels progress  
+- **Bullet Speed**: Increases as levels progress
+- **Fire Rate**: Increases (faster firing) as levels progress
+- **Asteroid Count**: Increases by 1 per level
+- **Asteroid Max Velocity**: Increases as levels progress
+
+### Physics & Movement
+- **Ship Friction**: Applied each frame (violates astrophysics but improves gameplay)
+- **Bullet Travel Distance**: Half the screen diagonal before despawning
+- **Collision Detection**: Simple circle-based collision system
+
+### Scoring System
+- **Points per Asteroid**: 100 points each (all sizes)
+- **Extra Life**: Awarded every 20,000 points
+- **Death Blossom**: Special ability indicated by ☀️ emoji, one per ship
+  - Desktop: Activate with **shift-B**
+  - Mobile: Activate by **shaking device**
+
+### Special Features
+- **Safe Respawn Zone**: 20% larger collision detection area when waiting for ship respawn
+- **Kid Mode**: Hides scoring, prevents death, no lives system
+- **Sound Effects**: Dynamic Web Audio API generated sounds
+- **Mobile Support**: Touch controls with full-screen angle mapping
 
 ## License
 
