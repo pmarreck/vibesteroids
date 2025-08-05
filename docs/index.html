@@ -799,6 +799,7 @@
         },
         shipExploding: false,
         shipExplosionStartTime: 0,
+        waitingForRespawn: false,
         lastFireTime: 0,
         escapeKeyWasPressed: false,
         get manualPauseToggleRequested() {
@@ -818,7 +819,7 @@
         deathBlossomRotations: 0,
         deathBlossomTotalAngleRotated: 0,
         deathBlossomAvailable: true,
-        DEATH_BLOSSOM_ROTATION_COUNT: 10, // Number of full rotations before Death Blossom ends (configurable)
+        DEATH_BLOSSOM_ROTATION_COUNT: 12, // Number of full rotations before Death Blossom ends (configurable)
 
         // Game constants (scaled dynamically)
         get SHIP_ACCELERATION() {
@@ -942,7 +943,8 @@
           GameState.deathBlossomAvailable &&
           !GameState.deathBlossomActive &&
           !GameState.gameOver &&
-          !GameState.shipExploding
+          !GameState.shipExploding &&
+          !GameState.waitingForRespawn
         ) {
           const currentTime = Date.now();
           activateDeathBlossom(GameState, currentTime);
@@ -1082,7 +1084,8 @@
           GameState.deathBlossomAvailable &&
           !GameState.deathBlossomActive &&
           !GameState.gameOver &&
-          !GameState.shipExploding
+          !GameState.shipExploding &&
+          !GameState.waitingForRespawn
         ) {
           updateDebug("SHAKE DETECTED - Death Blossom activated!");
           lastShakeTime = currentTime;
@@ -1194,7 +1197,8 @@
               GameState.deathBlossomAvailable &&
               !GameState.deathBlossomActive &&
               !GameState.gameOver &&
-              !GameState.shipExploding
+              !GameState.shipExploding &&
+          !GameState.waitingForRespawn
             ) {
               activateDeathBlossom(GameState, Date.now());
               updateDebug("Death Blossom activated via button");
@@ -1263,7 +1267,8 @@
               GameState.deathBlossomAvailable &&
               !GameState.deathBlossomActive &&
               !GameState.gameOver &&
-              !GameState.shipExploding
+              !GameState.shipExploding &&
+          !GameState.waitingForRespawn
             ) {
               dbButton.style.display = "block";
             } else {
@@ -1580,7 +1585,17 @@
 
         // Draw ship (unless exploding or game over)
         if (!state.shipExploding && !state.gameOver) {
-          drawShip(ctx, state.ship);
+          if (state.waitingForRespawn) {
+            // Draw greyed-out ship during waiting state
+            ctx.save();
+            ctx.globalAlpha = 0.3; // Semi-transparent
+            ctx.strokeStyle = "#666"; // Grey color
+            drawShip(ctx, state.ship);
+            ctx.restore();
+          } else {
+            // Draw normal ship
+            drawShip(ctx, state.ship);
+          }
         }
 
         // Draw bullets
@@ -1977,9 +1992,9 @@
       ) {
         if (!state.deathBlossomActive) return state;
 
-        const rotationSpeed = 6; // 6 radians per second for fast rotation (3x faster)
+        const rotationSpeed = 7.2; // 7.2 radians per second for fast rotation (20% faster than 6)
         const deathBlossomRotationCount =
-          state.DEATH_BLOSSOM_ROTATION_COUNT || 10; // Number of full rotations (configurable)
+          state.DEATH_BLOSSOM_ROTATION_COUNT || 12; // Number of full rotations (configurable)
         const totalAngleToRotate = deathBlossomRotationCount * (2 * mathObj.PI);
 
         // Auto-rotate ship continuously
@@ -2136,6 +2151,7 @@
           paused: state.paused,
           shipExploding: state.shipExploding,
           shipExplosionStartTime: state.shipExplosionStartTime,
+          waitingForRespawn: state.waitingForRespawn,
           lastFireTime: state.lastFireTime,
           autoFire: state.autoFire,
           escapeKeyWasPressed: keysPressed["Escape"] || false,
@@ -2180,23 +2196,13 @@
               if (gameOverScreen) gameOverScreen.style.display = "block";
             }
           } else {
-            // Respawn ship
-            newState.ship.x = GAME_WIDTH / 2;
-            newState.ship.y = GAME_HEIGHT / 2;
-            newState.ship.vx = 0;
-            newState.ship.vy = 0;
-            newState.ship.angle = -Math.PI / 2;
-
-            // Reset Death Blossom availability for new ship life
-            newState.deathBlossomAvailable = true;
-
-            // Trigger neon title splash on ship respawn
-            newState.titleSplashVisible = true;
-            newState.titleSplashFrameCount = 0;
+            // Enter waiting for respawn state instead of immediate respawn
+            newState.waitingForRespawn = true;
           }
         }
 
-        // Update ship based on input (only if not exploding)
+
+        // Update ship based on input (only if not exploding; allow steering during waitingForRespawn)
         if (!newState.shipExploding) {
           // Handle rotation - Death Blossom overrides manual controls
           if (!newState.deathBlossomActive) {
@@ -2211,8 +2217,8 @@
           }
           // If Death Blossom is active, ship.angle is already set by updateDeathBlossomState
 
-          // Handle thrust - Death Blossom overrides manual controls
-          if (!newState.deathBlossomActive) {
+          // Handle thrust - Death Blossom overrides manual controls, no thrust during waitingForRespawn
+          if (!newState.deathBlossomActive && !newState.waitingForRespawn) {
             // Normal thrust controls (keyboard or mobile)
             if (keysPressed["ArrowUp"] || isThrusting) {
               newState.ship.thrusting = true;
@@ -2230,25 +2236,33 @@
               newState.ship.thrusting = false;
             }
           } else {
-            // During Death Blossom, no manual thrust control
+            // During Death Blossom or waitingForRespawn, no manual thrust control
             newState.ship.thrusting = false;
           }
 
-          // Update ship position (scale velocity with scale factor)
-          newState.ship.x += newState.ship.vx * scaleFactor * deltaTime;
-          newState.ship.y += newState.ship.vy * scaleFactor * deltaTime;
+          // Update ship position and velocity (only when not waiting for respawn)
+          if (!newState.waitingForRespawn) {
+            newState.ship.x += newState.ship.vx * scaleFactor * deltaTime;
+            newState.ship.y += newState.ship.vy * scaleFactor * deltaTime;
 
-          // Apply drag to gradually slow the ship down
-          const dragFactor = 0.99; // Ship retains 99% of velocity per frame (gentle drag)
-          newState.ship.vx *= dragFactor;
-          newState.ship.vy *= dragFactor;
+            // Apply drag to gradually slow the ship down
+            const dragFactor = 0.99; // Ship retains 99% of velocity per frame (gentle drag)
+            newState.ship.vx *= dragFactor;
+            newState.ship.vy *= dragFactor;
 
-          // Screen wrapping
-          if (newState.ship.x < 0) newState.ship.x = GAME_WIDTH;
-          else if (newState.ship.x > GAME_WIDTH) newState.ship.x = 0;
+            // Screen wrapping
+            if (newState.ship.x < 0) newState.ship.x = GAME_WIDTH;
+            else if (newState.ship.x > GAME_WIDTH) newState.ship.x = 0;
 
-          if (newState.ship.y < 0) newState.ship.y = GAME_HEIGHT;
-          else if (newState.ship.y > GAME_HEIGHT) newState.ship.y = 0;
+            if (newState.ship.y < 0) newState.ship.y = GAME_HEIGHT;
+            else if (newState.ship.y > GAME_HEIGHT) newState.ship.y = 0;
+          } else {
+            // Override position and velocity for waiting state (in case input processing modified them)
+            newState.ship.x = GAME_WIDTH / 2;
+            newState.ship.y = GAME_HEIGHT / 2;
+            newState.ship.vx = 0;
+            newState.ship.vy = 0;
+          }
 
           // Fire bullets (with rate limiting)
           let shouldFire;
@@ -2256,7 +2270,7 @@
           if (newState.deathBlossomActive) {
             // Death Blossom mode: auto-fire at 10x rate, ignore manual controls
             shouldFire = shouldDeathBlossomFire(newState, currentTime);
-          } else {
+          } else if (!newState.waitingForRespawn) {
             // Normal firing logic with level-based fire rate scaling
             // Scale from 250ms (level 1) to 125ms (level 20+) for double fire rate
             const baseFireDelay = 250; // milliseconds at level 1
@@ -2278,6 +2292,9 @@
                 (state.autoFire && !isMobileRotaryFiring) ||
                 isMobileRotaryFiring) &&
               currentTime - newState.lastFireTime > fireDelay;
+          } else {
+            // No firing during waitingForRespawn
+            shouldFire = false;
           }
 
           if (shouldFire) {
@@ -2436,8 +2453,8 @@
           }
         }
 
-        // Check ship-asteroid collisions (only if ship is not already exploding)
-        if (!newState.shipExploding) {
+        // Check ship-asteroid collisions (only if ship is not already exploding and not waiting for respawn)
+        if (!newState.shipExploding && !newState.waitingForRespawn) {
           for (let i = newState.asteroids.length - 1; i >= 0; i--) {
             const asteroid = newState.asteroids[i];
             if (
@@ -2521,6 +2538,33 @@
           if (alpha <= 0) {
             newState.titleSplashVisible = false;
           }
+        }
+
+        // Check for safe respawn if waiting - do this at the very end to override any velocity changes
+        if (newState.waitingForRespawn) {
+          const spawnX = GAME_WIDTH / 2;
+          const spawnY = GAME_HEIGHT / 2;
+          const safeRadius = scale(80); // Safe radius around spawn point (about 4x ship radius)
+          
+          // Keep ship stationary at spawn point during waiting
+          newState.ship.x = spawnX;
+          newState.ship.y = spawnY;
+          newState.ship.vx = 0;
+          newState.ship.vy = 0;
+          
+          if (isSpawnAreaClear(newState.asteroids, spawnX, spawnY, safeRadius)) {
+            // Safe to respawn - ship is already positioned
+            newState.ship.angle = -Math.PI / 2;
+            newState.waitingForRespawn = false;
+
+            // Reset Death Blossom availability for new ship life
+            newState.deathBlossomAvailable = true;
+
+            // Trigger neon title splash on ship respawn
+            newState.titleSplashVisible = true;
+            newState.titleSplashFrameCount = 1; // Set to 1 since increment happens earlier in update cycle
+          }
+          // If not safe, continue waiting (game state will keep updating)
         }
 
         return newState;
@@ -2709,6 +2753,17 @@
         return Math.sqrt(dx * dx + dy * dy);
       }
 
+      function isSpawnAreaClear(asteroids, spawnX, spawnY, safeRadius) {
+        const spawnPoint = { x: spawnX, y: spawnY };
+        for (let i = 0; i < asteroids.length; i++) {
+          const asteroid = asteroids[i];
+          if (distance(spawnPoint, asteroid) < safeRadius + asteroid.radius) {
+            return false; // Asteroid too close to spawn point
+          }
+        }
+        return true; // All asteroids are far enough away
+      }
+
       // Ensure velocity is never too close to zero to prevent border sticking
       function ensureMinimumVelocity(velocity, minVelocity = 15) {
         const absVel = Math.abs(velocity);
@@ -2829,6 +2884,7 @@
         GameState.paused = newState.paused;
         GameState.shipExploding = newState.shipExploding;
         GameState.shipExplosionStartTime = newState.shipExplosionStartTime;
+        GameState.waitingForRespawn = newState.waitingForRespawn;
         GameState.lastFireTime = newState.lastFireTime;
         GameState.autoFire = newState.autoFire;
         GameState.escapeKeyWasPressed = newState.escapeKeyWasPressed;
@@ -2881,6 +2937,7 @@
         GameState.paused = false;
         GameState.shipExploding = false;
         GameState.shipExplosionStartTime = 0;
+        GameState.waitingForRespawn = false;
         GameState.lastFireTime = 0;
         GameState.autoFire = false;
         GameState.level = 1; // Reset to level 1 on game restart
@@ -2943,6 +3000,7 @@
           paused: state.paused,
           shipExploding: state.shipExploding,
           shipExplosionStartTime: state.shipExplosionStartTime,
+          waitingForRespawn: state.waitingForRespawn,
           lastFireTime: state.lastFireTime,
           autoFire: state.autoFire,
           escapeKeyWasPressed: state.escapeKeyWasPressed,
@@ -4965,6 +5023,7 @@
                 shipExploding: true,
                 shipExplosionStartTime: 100,
                 lives: 2,
+                asteroids: [], // No asteroids blocking spawn
                 titleSplashVisible: false,
                 titleSplashFrameCount: 999, // Old splash data
               };
@@ -5186,7 +5245,7 @@
 
                 updateDeathBlossomState(testState, deltaTime, currentTime);
 
-                const expectedAngleChange = 6 * deltaTime; // 6 radians per second (3x faster)
+                const expectedAngleChange = 7.2 * deltaTime; // 7.2 radians per second (20% faster than 6)
                 const actualAngleChange = testState.ship.angle - initialAngle;
 
                 if (Math.abs(actualAngleChange - expectedAngleChange) > 0.001) {
@@ -5204,7 +5263,7 @@
 
                 // Simulate one full rotation (2π radians)
                 const oneFullRotation = 2 * Math.PI;
-                const deltaTime = oneFullRotation / 6; // At 6 rad/s, this will rotate exactly 2π
+                const deltaTime = oneFullRotation / 7.2; // At 7.2 rad/s, this will rotate exactly 2π
                 updateDeathBlossomState(testState, deltaTime, 1000);
 
                 if (testState.deathBlossomRotations !== 1) {
@@ -5223,20 +5282,20 @@
                 }
               });
 
-              it("should end Death Blossom after 10 rotations", function () {
+              it("should end Death Blossom after 12 rotations", function () {
                 // Set up test state manually
                 testState.deathBlossomActive = true;
                 testState.deathBlossomStartTime = 1000;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
 
-                // Simulate exactly 9 full rotations (9 * 2π radians)
-                const nineFullRotations = 9 * 2 * Math.PI;
-                const deltaTime = nineFullRotations / 6; // At 6 rad/s, this will rotate exactly 18π
+                // Simulate exactly 12 full rotations (12 * 2π radians)
+                const twelveFullRotations = 12 * 2 * Math.PI;
+                const deltaTime = twelveFullRotations / 7.2; // At 7.2 rad/s, this will rotate exactly 24π
                 updateDeathBlossomState(testState, deltaTime, 1000);
 
                 if (testState.deathBlossomActive) {
-                  throw new Error("Death Blossom should end after 10 rotations");
+                  throw new Error("Death Blossom should end after 12 rotations");
                 }
                 if (testState.deathBlossomStartTime !== 0) {
                   throw new Error("Start time should be reset to 0");
@@ -5254,11 +5313,11 @@
                 testState.deathBlossomActive = true;
                 testState.deathBlossomStartTime = 1000;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
 
-                // Simulate exactly 9 full rotations to end Death Blossom
-                const nineFullRotations = 9 * 2 * Math.PI;
-                const deltaTime = nineFullRotations / 6; // At 6 rad/s
+                // Simulate exactly 12 full rotations to end Death Blossom
+                const twelveFullRotations = 12 * 2 * Math.PI;
+                const deltaTime = twelveFullRotations / 7.2; // At 7.2 rad/s
                 updateDeathBlossomState(testState, deltaTime, 1000);
 
                 if (testState.deathBlossomActive) {
@@ -5347,7 +5406,7 @@
                 testState.deathBlossomTotalAngleRotated = 0;
 
                 // First half rotation
-                updateDeathBlossomState(testState, Math.PI / 6, 1000); // π/6 seconds at 6 rad/s = π radians
+                updateDeathBlossomState(testState, Math.PI / 7.2, 1000); // π/7.2 seconds at 7.2 rad/s = π radians
                 if (testState.deathBlossomRotations !== 0) {
                   throw new Error(
                     `Expected 0 rotations after π radians, got ${testState.deathBlossomRotations}`,
@@ -5355,7 +5414,7 @@
                 }
 
                 // Complete first rotation
-                updateDeathBlossomState(testState, Math.PI / 6, 1000); // Another π radians = 2π total
+                updateDeathBlossomState(testState, Math.PI / 7.2, 1000); // Another π radians = 2π total
                 if (testState.deathBlossomRotations !== 1) {
                   throw new Error(
                     `Expected 1 rotation after 2π radians, got ${testState.deathBlossomRotations}`,
@@ -5363,7 +5422,7 @@
                 }
 
                 // Add 1.5 more rotations (total 2.5)
-                updateDeathBlossomState(testState, Math.PI / 2, 1000); // π/2 seconds at 6 rad/s = 3π radians, 5π total
+                updateDeathBlossomState(testState, (3 * Math.PI) / 7.2, 1000); // 3π/7.2 seconds at 7.2 rad/s = 3π radians, 5π total
                 if (testState.deathBlossomRotations !== 2) {
                   throw new Error(
                     `Expected 2 rotations after 5π radians, got ${testState.deathBlossomRotations}`,
@@ -5378,32 +5437,32 @@
                 }
               });
 
-              it("should end precisely after 9 full rotations", function () {
+              it("should end precisely after 12 full rotations", function () {
                 testState.deathBlossomActive = true;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 9;
+                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
 
-                // Do 8.9 rotations (should still be active)
-                const almostNineRotations = 8.9 * 2 * Math.PI;
+                // Do 11.9 rotations (should still be active)
+                const almostTwelveRotations = 11.9 * 2 * Math.PI;
                 updateDeathBlossomState(
                   testState,
-                  almostNineRotations / 6,
+                  almostTwelveRotations / 7.2,
                   1000,
                 );
 
                 if (!testState.deathBlossomActive) {
                   throw new Error(
-                    "Death Blossom should still be active at 8.9 rotations",
+                    "Death Blossom should still be active at 11.9 rotations",
                   );
                 }
 
-                // Add just enough to reach exactly 9 rotations
-                const remainingAngle = 9 * 2 * Math.PI - almostNineRotations;
-                updateDeathBlossomState(testState, remainingAngle / 6, 1000);
+                // Add just enough to reach exactly 12 rotations
+                const remainingAngle = 12 * 2 * Math.PI - almostTwelveRotations;
+                updateDeathBlossomState(testState, remainingAngle / 7.2, 1000);
 
                 if (testState.deathBlossomActive) {
                   throw new Error(
-                    "Death Blossom should end at exactly 9 rotations",
+                    "Death Blossom should end at exactly 12 rotations",
                   );
                 }
               });
@@ -6587,6 +6646,196 @@
                 throw new Error(
                   "Expected Death Blossom message to be hidden when Death Blossom is not active",
                 );
+              }
+            });
+          });
+
+          describe("Safe Respawn System", function () {
+            it("should enter waitingForRespawn state after ship explosion ends", function () {
+              // Create test state manually (like other working tests)
+              const baseState = {
+                ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                shipExploding: true,
+                shipExplosionStartTime: 1000,
+                waitingForRespawn: false,
+                lives: 2, // Has remaining lives
+                gameOver: false,
+                paused: false,
+                asteroids: [{ 
+                  x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, 
+                  vx: 0, vy: 0,
+                  baseRadius: 200, radius: 200,
+                  basePoints: [[200, 0], [0, 200], [-200, 0], [0, -200]],
+                  points: [[200, 0], [0, 200], [-200, 0], [0, -200]],
+                  angle: 0, angularVelocity: 0
+                }], // Large blocking asteroid at center
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                lastFireTime: 0,
+                deathBlossomActive: false,
+                deathBlossomAvailable: true,
+                deathBlossomStartTime: 0,
+                deathBlossomRotations: 0,
+                deathBlossomTotalAngleRotated: 0,
+                sound: new MockSoundInterface(),
+                ROTATION_SPEED: 5,
+                SHIP_ACCELERATION: 300,
+                BULLET_SPEED: 500,
+                level: 1,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              // Update after explosion should end (2+ seconds later)
+              const newState = updateGameState(baseState, {}, 16.67, 3100);
+
+              if (newState.shipExploding) {
+                throw new Error("Ship should no longer be exploding");
+              }
+              if (!newState.waitingForRespawn) {
+                throw new Error(`Ship should be in waitingForRespawn state. Lives: ${newState.lives}, GameOver: ${newState.gameOver}, WaitingForRespawn: ${newState.waitingForRespawn}`);
+              }
+            });
+
+            it("should check spawn area for asteroids using isSpawnAreaClear", function () {
+              const spawnX = GAME_WIDTH / 2;
+              const spawnY = GAME_HEIGHT / 2;
+              const asteroids = [
+                { x: 100, y: 100, radius: 30 }, // Far from spawn
+                { x: spawnX, y: spawnY - 30, radius: 20 }, // Close to spawn
+              ];
+              const safeRadius = 80;
+
+              const result = isSpawnAreaClear(asteroids, spawnX, spawnY, safeRadius);
+
+              if (result) {
+                throw new Error(`Spawn area should not be clear with asteroid at (${spawnX}, ${spawnY - 30})`);
+              }
+            });
+
+            it("should allow ship steering during waitingForRespawn but no thrust or firing", function () {
+              const testState = {
+                ship: { x: 400, y: 300, vx: -50, vy: -50, angle: 0, radius: 10, thrusting: false },
+                shipExploding: false,
+                waitingForRespawn: true,
+                lives: 2,
+                gameOver: false,
+                asteroids: [],
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                lastFireTime: 0,
+                deathBlossomActive: false,
+                deathBlossomAvailable: true,
+                deathBlossomStartTime: 0,
+                deathBlossomRotations: 0,
+                deathBlossomTotalAngleRotated: 0,
+                sound: new MockSoundInterface(),
+                ROTATION_SPEED: 5,
+                SHIP_ACCELERATION: 300,
+                BULLET_SPEED: 500,
+                level: 1,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              const keysPressed = { "ArrowLeft": true, "ArrowUp": true, " ": true };
+              const newState = updateGameState(testState, keysPressed, 0.1, 1000);
+
+              // Rotation should work
+              if (newState.ship.angle >= 0) {
+                throw new Error("Ship angle should have changed with ArrowLeft during waitingForRespawn");
+              }
+
+              // Thrust should not work (velocity should be reset to 0, position reset to spawn)
+              if (newState.ship.vx !== 0 || newState.ship.vy !== 0) {
+                throw new Error(`Ship should not have velocity during waitingForRespawn. vx: ${newState.ship.vx}, vy: ${newState.ship.vy}`);
+              }
+              const expectedX = GAME_WIDTH / 2;
+              const expectedY = GAME_HEIGHT / 2;
+              if (newState.ship.x !== expectedX || newState.ship.y !== expectedY) {
+                throw new Error(`Ship should be at spawn position during waitingForRespawn. Expected: (${expectedX}, ${expectedY}), got: (${newState.ship.x}, ${newState.ship.y})`);
+              }
+
+              // Firing should not work
+              if (newState.bullets.length > 0) {
+                throw new Error("Ship should not fire bullets during waitingForRespawn");
+              }
+            });
+
+            it("should respawn ship when spawn area becomes clear", function () {
+              const testState = {
+                ship: { x: 400, y: 300, vx: 0, vy: 0, angle: 0, radius: 10 },
+                shipExploding: false,
+                waitingForRespawn: true,
+                lives: 2,
+                gameOver: false,
+                asteroids: [], // No asteroids blocking spawn
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                deathBlossomActive: false,
+                deathBlossomAvailable: false,
+                deathBlossomStartTime: 0,
+                deathBlossomRotations: 0,
+                deathBlossomTotalAngleRotated: 0,
+                titleSplashVisible: false,
+                titleSplashFrameCount: 0,
+                sound: new MockSoundInterface(),
+                level: 1,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              const newState = updateGameState(testState, {}, 16.67, 1000);
+
+              if (newState.waitingForRespawn) {
+                throw new Error("Ship should no longer be waiting for respawn");
+              }
+              if (!newState.deathBlossomAvailable) {
+                throw new Error("Death Blossom should be available after respawn");
+              }
+              if (!newState.titleSplashVisible) {
+                throw new Error("Title splash should be visible after respawn");
+              }
+            });
+
+            it("should continue waiting when spawn area is blocked", function () {
+              // Create test state manually (like other working tests)
+              const baseState = {
+                ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                shipExploding: false,
+                waitingForRespawn: true,
+                lives: 2,
+                gameOver: false,
+                paused: false,
+                asteroids: [{ 
+                  x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, 
+                  vx: 0, vy: 0,
+                  baseRadius: 200, radius: 200,
+                  basePoints: [[200, 0], [0, 200], [-200, 0], [0, -200]],
+                  points: [[200, 0], [0, 200], [-200, 0], [0, -200]],
+                  angle: 0, angularVelocity: 0
+                }], // Large blocking asteroid at center
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                lastFireTime: 0,
+                deathBlossomActive: false,
+                deathBlossomAvailable: true,
+                deathBlossomStartTime: 0,
+                deathBlossomRotations: 0,
+                deathBlossomTotalAngleRotated: 0,
+                sound: new MockSoundInterface(),
+                ROTATION_SPEED: 5,
+                SHIP_ACCELERATION: 300,
+                BULLET_SPEED: 500,
+                level: 1,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              const newState = updateGameState(baseState, {}, 16.67, 1000);
+
+              if (!newState.waitingForRespawn) {
+                throw new Error(`Ship should still be waiting for respawn when spawn area is blocked. WaitingForRespawn: ${newState.waitingForRespawn}, asteroids: ${newState.asteroids.length}`);
               }
             });
           });
