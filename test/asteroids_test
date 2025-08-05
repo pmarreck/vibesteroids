@@ -119,6 +119,21 @@ const jsCode = htmlContent.substring(beginIndex, endIndex + endMarker.length);
 // Set up global Math object for Node.js compatibility
 global.Math = Math;
 
+// Check for seed parameter from command line
+const args = process.argv.slice(2);
+let testSeed = null;
+for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--seed' && i + 1 < args.length) {
+        testSeed = parseInt(args[i + 1]);
+        break;
+    }
+}
+
+// Set seed in global scope for the game code to use
+if (testSeed !== null) {
+    global.TEST_SEED = testSeed;
+}
+
 // Override requestAnimationFrame to prevent game loop from running
 global.requestAnimationFrame = function(callback) {
     // Don't actually call the callback - this prevents the game loop

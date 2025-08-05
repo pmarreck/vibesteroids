@@ -3,8 +3,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A functional-style Asteroids clone implemented in vanilla JavaScript in a single HTML file with a pure, immutable game state architecture.
-The game code was started using a locally-running model (GLM-4.5-Air) running on an M4 128GB Macbook Pro, and then refined using Claude 4.
-This project showcases LLM-aided development with a focus on clean code, testability, and functional programming principles.
+
+## Why "Vibesteroids"?
+
+This project was an experiment in **100% "vibe coding"** - an emerging development paradigm where developers direct and guide the coding process through natural language conversation with AI models, never writing code directly themselves. The name "Vibesteroids" reflects this approach where every single line of code was written by AI through conversational direction. The game code was started using a locally-running model (GLM-4.5-Air) running on an M4 128GB Macbook Pro, and then refined using Claude 4. This project showcases what's possible with pure conversational programming while maintaining focus on clean code, testability, and functional programming principles.
+
+*Note: Any overly pedantic or verbose explanations in this README are also the result of the no-human-code rule - blame Claude! 🤖*
 
 ## Features
 
@@ -19,7 +23,7 @@ This project showcases LLM-aided development with a focus on clean code, testabi
 ## Quick Start
 
 ### Web Version
-Simply open `src/asteroids.html` in any modern web browser.
+Simply open `src/asteroids.html` in any modern web browser, or visit the [live demo](https://pmarreck.github.io/vibesteroids/) hosted on GitHub Pages.
 
 ### Command Line (Unix-like systems)
 ```bash
@@ -83,21 +87,34 @@ The game follows a functional architecture with these key principles:
 
 ## Testing
 
-The game includes a comprehensive test suite that can be run in both Node.js and the browser.
+The game includes a comprehensive test suite with 108 tests that can be run in both Node.js and the browser.
 
 ### Running Tests
 
 #### In the Browser
 1. Open `src/asteroids.html?test` in your browser (or type shift-T in the game)
 2. Test results will be displayed on the screen
+3. To run with a specific seed for reproducible randomness: `src/asteroids.html?test&seed=12345`
 
 #### Command Line (requires Node.js)
 ```bash
 # Make the test file executable if it's not already
 chmod +x test/asteroids_test
+
 # Run the test suite
 ./test/asteroids_test
+
+# Run with a specific seed for reproducible test results
+./test/asteroids_test --seed 12345
+
+# Alternative: use node directly
+node test/asteroids_test
+node test/asteroids_test --seed 12345
 ```
+
+### Test Reproducibility
+
+Tests use deterministic randomness with seeds for reproducible results. When a test fails, the seed is displayed in the output (e.g., `[SEED] Using random seed: 608320`) so you can reproduce the exact same test conditions by running with that seed.
 
 ### Test Coverage
 
@@ -120,13 +137,17 @@ The test suite covers:
 
 ```
 .
+├── docs/
+│   └── index.html        # Main game file (HTML/JS/CSS) - served by GitHub Pages
 ├── src/
-│   └── asteroids.html    # Main game file (HTML/JS/CSS)
+│   └── asteroids.html    # Symlink to ../docs/index.html for local development
 ├── test/
 │   └── asteroids_test    # Test runner
 ├── asteroids             # POSIX-compliant launcher script
 └── README.md             # This file
 ```
+
+*Note: The `src/asteroids.html` is a symbolic link to `docs/index.html` to support both local development and GitHub Pages deployment from the same file.*
 
 ## Contributing
 
