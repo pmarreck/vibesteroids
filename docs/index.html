@@ -884,6 +884,7 @@
         shipExploding: false,
         shipExplosionStartTime: 0,
         waitingForRespawn: false,
+        waitingForRespawnStartTime: 0,
         lastFireTime: 0,
         escapeKeyWasPressed: false,
         get manualPauseToggleRequested() {
@@ -2253,6 +2254,7 @@
           shipExploding: state.shipExploding,
           shipExplosionStartTime: state.shipExplosionStartTime,
           waitingForRespawn: state.waitingForRespawn,
+          waitingForRespawnStartTime: state.waitingForRespawnStartTime,
           lastFireTime: state.lastFireTime,
           autoFire: state.autoFire,
           escapeKeyWasPressed: keysPressed["Escape"] || false,
@@ -2300,6 +2302,7 @@
           } else {
             // Enter waiting for respawn state instead of immediate respawn
             newState.waitingForRespawn = true;
+            newState.waitingForRespawnStartTime = currentTime;
           }
         }
 
@@ -2658,7 +2661,34 @@
         if (newState.waitingForRespawn) {
           const spawnX = GAME_WIDTH / 2;
           const spawnY = GAME_HEIGHT / 2;
-          const safeRadius = scale(96); // Safe radius around spawn point (20% larger, about 4.8x ship radius)
+          
+          // Calculate safe radius - reduce by half after 5 seconds of waiting
+          const waitingTime = currentTime - newState.waitingForRespawnStartTime;
+          const baseSafeRadius = scale(96); // Safe radius around spawn point (20% larger, about 4.8x ship radius)
+          const safeRadius = waitingTime > 5000 ? baseSafeRadius / 2 : baseSafeRadius;
+          
+          // Desperation bomb after 10 seconds - destroy all asteroids in spawn area
+          if (waitingTime > 10000) {
+            const bombRadius = scale(80); // 8x ship radius (ship radius = 10)
+            const spawnPoint = { x: spawnX, y: spawnY };
+            
+            // Find and destroy asteroids within bomb radius
+            for (let i = newState.asteroids.length - 1; i >= 0; i--) {
+              const asteroid = newState.asteroids[i];
+              if (distance(spawnPoint, asteroid) < bombRadius + asteroid.radius) {
+                // Create explosion effect at asteroid location
+                createExplosion(newState, asteroid.x, asteroid.y);
+                // Remove asteroid (no points awarded)
+                newState.asteroids.splice(i, 1);
+              }
+            }
+            
+            // Play explosion sound for the bomb
+            newState.sound.playExplosion();
+            
+            // Create additional explosion effect at spawn center
+            createExplosion(newState, spawnX, spawnY);
+          }
 
           // Keep ship stationary at spawn point during waiting
           newState.ship.x = spawnX;
@@ -2671,6 +2701,7 @@
           ) {
             // Safe to respawn - ship is already positioned and retains its current angle
             newState.waitingForRespawn = false;
+            newState.waitingForRespawnStartTime = 0;
 
             // Reset Death Blossom availability for new ship life
             newState.deathBlossomAvailable = true;
@@ -3016,6 +3047,7 @@
         GameState.shipExploding = newState.shipExploding;
         GameState.shipExplosionStartTime = newState.shipExplosionStartTime;
         GameState.waitingForRespawn = newState.waitingForRespawn;
+        GameState.waitingForRespawnStartTime = newState.waitingForRespawnStartTime;
         GameState.lastFireTime = newState.lastFireTime;
         GameState.autoFire = newState.autoFire;
         GameState.escapeKeyWasPressed = newState.escapeKeyWasPressed;
@@ -3070,6 +3102,7 @@
         GameState.shipExploding = false;
         GameState.shipExplosionStartTime = 0;
         GameState.waitingForRespawn = false;
+        GameState.waitingForRespawnStartTime = 0;
         GameState.lastFireTime = 0;
         GameState.autoFire = false;
         GameState.level = initialLevel; // Reset to initial level (from URL param or default 1)
@@ -3142,6 +3175,7 @@
           shipExploding: state.shipExploding,
           shipExplosionStartTime: state.shipExplosionStartTime,
           waitingForRespawn: state.waitingForRespawn,
+          waitingForRespawnStartTime: state.waitingForRespawnStartTime,
           lastFireTime: state.lastFireTime,
           autoFire: state.autoFire,
           escapeKeyWasPressed: state.escapeKeyWasPressed,
@@ -7366,6 +7400,114 @@
                 throw new Error(
                   `Ship should retain its angle during respawn. Expected: ${customAngle}, got: ${newState.ship.angle}`,
                 );
+              }
+            });
+
+            it("should reduce safe zone radius by half after 5 seconds of waiting", function () {
+              // Create test state with ship waiting for respawn and asteroids blocking spawn
+              const waitingStartTime = 1000;
+              const testState = {
+                ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                shipExploding: false,
+                waitingForRespawn: true,
+                waitingForRespawnStartTime: waitingStartTime,
+                lives: 2,
+                gameOver: false,
+                paused: false,
+                level: 1,
+                score: 0,
+                bullets: [],
+                particles: [],
+                shipDebris: [],
+                asteroids: [{ 
+                  x: GAME_WIDTH / 2 + 80, y: GAME_HEIGHT / 2, // 80 pixels away: blocks full safe zone (96+30=126) but allows reduced zone (48+30=78)
+                  vx: 0, vy: 0,
+                  baseRadius: 30, radius: 30,
+                  basePoints: [[30, 0], [0, 30], [-30, 0], [0, -30]],
+                  points: [[30, 0], [0, 30], [-30, 0], [0, -30]],
+                  angle: 0, angularVelocity: 0
+                }],
+                kidMode: false,
+                autoFire: false,
+                lastFireTime: 0,
+                SHIP_ACCELERATION: 300,
+                BULLET_SPEED: 500,
+                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+              };
+
+              // Test at 4 seconds - should still be waiting (full safe zone)
+              const fourSecondsLater = waitingStartTime + 4000;
+              const result4s = updateGameState(testState, {}, 16.67, fourSecondsLater);
+              
+              if (!result4s.waitingForRespawn) {
+                throw new Error("Ship should still be waiting after 4 seconds with full safe zone");
+              }
+
+              // Test at 6 seconds - should be able to respawn (reduced safe zone)
+              const sixSecondsLater = waitingStartTime + 6000;
+              const result6s = updateGameState(testState, {}, 16.67, sixSecondsLater);
+              
+              if (result6s.waitingForRespawn) {
+                throw new Error("Ship should be able to respawn after 5 seconds with reduced safe zone");
+              }
+            });
+
+            it("should trigger desperation bomb after 10 seconds and destroy nearby asteroids", function () {
+              // Create test state with ship waiting for respawn and asteroids in spawn area
+              const waitingStartTime = 1000;
+              const spawnX = GAME_WIDTH / 2;
+              const spawnY = GAME_HEIGHT / 2;
+              
+              const testState = createTestState({
+                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                shipExploding: false,
+                waitingForRespawn: true,
+                waitingForRespawnStartTime: waitingStartTime,
+                lives: 2,
+                score: 100, // Track score to ensure no points awarded
+                asteroids: [
+                  { // Close asteroid - should be destroyed
+                    x: spawnX + 40, y: spawnY, 
+                    vx: 0, vy: 0,
+                    baseRadius: 20, radius: 20,
+                    basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
+                    points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
+                    angle: 0, angularVelocity: 0
+                  },
+                  { // Far asteroid - should survive
+                    x: spawnX + 120, y: spawnY, // 120 pixels away: survives bomb radius (80+20=100)
+                    vx: 0, vy: 0,
+                    baseRadius: 20, radius: 20,
+                    basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
+                    points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
+                    angle: 0, angularVelocity: 0
+                  }
+                ]
+              });
+
+              // Test at 9 seconds - bomb should not trigger yet
+              const nineSecondsLater = waitingStartTime + 9000;
+              const result9s = updateGameState(testState, {}, 16.67, nineSecondsLater);
+              
+              if (result9s.asteroids.length !== 2) {
+                throw new Error(`Expected 2 asteroids before bomb, got ${result9s.asteroids.length}`);
+              }
+              if (result9s.score !== 100) {
+                throw new Error(`Score should not change before bomb, expected 100, got ${result9s.score}`);
+              }
+
+              // Test at 11 seconds - bomb should trigger and destroy close asteroid
+              const elevenSecondsLater = waitingStartTime + 11000;
+              const result11s = updateGameState(testState, {}, 16.67, elevenSecondsLater);
+              
+              if (result11s.asteroids.length !== 1) {
+                throw new Error(`Expected 1 asteroid after bomb (far one survives), got ${result11s.asteroids.length}`);
+              }
+              if (result11s.score !== 100) {
+                throw new Error(`Score should not increase from desperation bomb, expected 100, got ${result11s.score}`);
+              }
+              if (result11s.particles.length === 0) {
+                throw new Error("Explosion particles should be created by desperation bomb");
               }
             });
           });
