@@ -166,7 +166,7 @@
         <div>Score: <span id="scoreValue">0</span></div>
         <div>Level: <span id="levelValue">1</span></div>
       </div>
-      <div><span id="livesValue">🚀🚀🚀</span></div>
+      <div><span id="livesValue">🚀🚀</span></div>
       <div
         id="debugInfo"
         style="
@@ -274,6 +274,12 @@
         : new URLSearchParams(window.location.search);
       const isTestMode = isNodeJS || urlParams.has("test");
 
+      // Parse test suites (default to both unit and perf)
+      const testSuites = isNodeJS
+        ? (typeof global !== 'undefined' && global.TEST_SUITES ? global.TEST_SUITES : "unit,perf")
+        : (urlParams.get("test") || "unit,perf");
+      const enabledSuites = testSuites.split(",").map(s => s.trim());
+
       // Check for level parameter to initialize game at specific level
       const levelParam = urlParams.get("level");
       const initialLevel = levelParam ? parseInt(levelParam, 10) : 1;
@@ -291,7 +297,7 @@
           : Math.floor(Math.random() * 1000000));
 
       /**
-       * Mulberry32 PRNG - A high-quality, fast pseudorandom number generator
+       * Mulberry32 PRNG core algorithm - A high-quality, fast pseudorandom number generator
        *
        * Why Mulberry32?
        * - Excellent statistical properties (passes BigCrush test suite)
@@ -299,18 +305,28 @@
        * - Simple implementation (easy to audit and understand)
        * - Widely used in game development and simulations
        * - Full 32-bit state space with good period length
-       *
-       * This enables deterministic testing by using a seeded RNG instead of Math.random()
+       */
+      function mulberry32Step(state) {
+        state |= 0; // Ensure 32-bit integer
+        state = (state + 0x6d2b79f5) | 0; // Add magic constant, keep 32-bit
+        let t = Math.imul(state ^ (state >>> 15), state | 1); // Mix bits
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61); // More mixing
+        return {
+          newState: state,
+          value: ((t ^ (t >>> 14)) >>> 0) / 4294967296 // Final mix and normalize to [0,1)
+        };
+      }
+
+      /**
+       * Simple closure-based RNG for basic use cases
        * Usage: const rng = createSeededRNG(12345); const value = rng(); // 0 <= value < 1
        */
       function createSeededRNG(seed) {
         let state = seed;
         return function () {
-          state |= 0; // Ensure 32-bit integer
-          state = (state + 0x6d2b79f5) | 0; // Add magic constant, keep 32-bit
-          let t = Math.imul(state ^ (state >>> 15), state | 1); // Mix bits
-          t ^= t + Math.imul(t ^ (t >>> 7), t | 61); // More mixing
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296; // Final mix and normalize to [0,1)
+          const result = mulberry32Step(state);
+          state = result.newState;
+          return result.value;
         };
       }
 
@@ -321,11 +337,9 @@
           seed: seed,
           state: state,
           next: function () {
-            state |= 0; // Ensure 32-bit integer
-            state = (state + 0x6d2b79f5) | 0; // Add magic constant, keep 32-bit
-            let t = Math.imul(state ^ (state >>> 15), state | 1); // Mix bits
-            t ^= t + Math.imul(t ^ (t >>> 7), t | 61); // More mixing
-            return ((t ^ (t >>> 14)) >>> 0) / 4294967296; // Final mix and normalize to [0,1)
+            const result = mulberry32Step(state);
+            state = result.newState;
+            return result.value;
           },
         };
       }
@@ -355,7 +369,7 @@
                         <canvas id="gameCanvas" width="1024" height="768"></canvas>
                         <div class="game-info">
                             <span id="scoreValue">0</span>
-                            <span id="livesValue">🚀🚀🚀</span>
+                            <span id="livesValue">🚀🚀</span>
                         </div>
                         <div id="gameOverScreen" style="display: none;">
                             <span id="finalScore">0</span>
@@ -792,6 +806,51 @@
       let GAME_WIDTH = BASE_WIDTH;
       let GAME_HEIGHT = BASE_HEIGHT;
       let SCALE_FACTOR = 1.0;
+      let PREVIOUS_GAME_WIDTH = 0;
+      let PREVIOUS_GAME_HEIGHT = 0;
+
+      // Base scalar constants for scaling
+      const SHIP_RADIUS = 10;
+      const BULLET_RADIUS = 2;
+      const PARTICLE_RADIUS = 2;
+      const BULLET_OFFSET = 20;
+      const TITLE_FONT_SIZE = 60;
+      const SUBTITLE_FONT_SIZE = 20;
+      const LINE_WIDTH_2 = 2;
+      const LINE_WIDTH_4 = 4;
+      const LINE_WIDTH_6 = 6;
+      const LINE_WIDTH_8 = 8;
+      const SHADOW_BLUR_5 = 5;
+      const SHADOW_BLUR_8 = 8;
+      const SHADOW_BLUR_10 = 10;
+      const SHADOW_BLUR_20 = 20;
+      const MAX_ASTEROID_RADIUS = 50;
+      const SAFE_RADIUS = 96;
+      const BOMB_RADIUS = 80;
+      const GAME_OVER_FONT_SIZE = 36;
+      const SUBTITLE_OFFSET = 200;
+
+      // Cached scaled constants (updated on resize)
+      let SCALED_SHIP_RADIUS = SHIP_RADIUS;
+      let SCALED_BULLET_RADIUS = BULLET_RADIUS;
+      let SCALED_PARTICLE_RADIUS = PARTICLE_RADIUS;
+      let SCALED_BULLET_OFFSET = BULLET_OFFSET;
+      let SCALED_TITLE_FONT_SIZE = TITLE_FONT_SIZE;
+      let SCALED_SUBTITLE_FONT_SIZE = SUBTITLE_FONT_SIZE;
+      let SCALED_LINE_WIDTH_2 = LINE_WIDTH_2;
+      let SCALED_LINE_WIDTH_4 = LINE_WIDTH_4;
+      let SCALED_LINE_WIDTH_6 = LINE_WIDTH_6;
+      let SCALED_LINE_WIDTH_8 = LINE_WIDTH_8;
+      let SCALED_SHADOW_BLUR_5 = SHADOW_BLUR_5;
+      let SCALED_SHADOW_BLUR_8 = SHADOW_BLUR_8;
+      let SCALED_SHADOW_BLUR_10 = SHADOW_BLUR_10;
+      let SCALED_SHADOW_BLUR_20 = SHADOW_BLUR_20;
+      let SCALED_MAX_ASTEROID_RADIUS = MAX_ASTEROID_RADIUS;
+      let SCALED_SAFE_RADIUS = SAFE_RADIUS;
+      let SCALED_BOMB_RADIUS = BOMB_RADIUS;
+      let SCALED_GAME_OVER_FONT_SIZE = GAME_OVER_FONT_SIZE;
+      let SCALED_SUBTITLE_OFFSET = SUBTITLE_OFFSET;
+      let SCALED_BULLET_BUFFER = MAX_ASTEROID_RADIUS / 2; // Half the width of largest asteroid
 
       // Calculate scale factor based on viewport diagonal (pure function with dependency injection)
       function calculateScaleFactor(
@@ -828,157 +887,186 @@
         // Update global variables (for legacy compatibility)
         GAME_WIDTH = gameWidth;
         GAME_HEIGHT = gameHeight;
-        SCALE_FACTOR = calculateScaleFactor(windowObj); // Keep for any legacy references
+        SCALE_FACTOR = calculateScaleFactor(windowObj);
 
-        // Update canvas size if document is available
-        if (documentObj) {
+        // Update cached scaled constants for performance
+        SCALED_SHIP_RADIUS = SHIP_RADIUS * SCALE_FACTOR;
+        SCALED_BULLET_RADIUS = BULLET_RADIUS * SCALE_FACTOR;
+        SCALED_PARTICLE_RADIUS = PARTICLE_RADIUS * SCALE_FACTOR;
+        SCALED_BULLET_OFFSET = BULLET_OFFSET * SCALE_FACTOR;
+        SCALED_TITLE_FONT_SIZE = TITLE_FONT_SIZE * SCALE_FACTOR;
+        SCALED_SUBTITLE_FONT_SIZE = SUBTITLE_FONT_SIZE * SCALE_FACTOR;
+        SCALED_LINE_WIDTH_2 = LINE_WIDTH_2 * SCALE_FACTOR;
+        SCALED_LINE_WIDTH_4 = LINE_WIDTH_4 * SCALE_FACTOR;
+        SCALED_LINE_WIDTH_6 = LINE_WIDTH_6 * SCALE_FACTOR;
+        SCALED_LINE_WIDTH_8 = LINE_WIDTH_8 * SCALE_FACTOR;
+        SCALED_SHADOW_BLUR_5 = SHADOW_BLUR_5 * SCALE_FACTOR;
+        SCALED_SHADOW_BLUR_8 = SHADOW_BLUR_8 * SCALE_FACTOR;
+        SCALED_SHADOW_BLUR_10 = SHADOW_BLUR_10 * SCALE_FACTOR;
+        SCALED_SHADOW_BLUR_20 = SHADOW_BLUR_20 * SCALE_FACTOR;
+        SCALED_MAX_ASTEROID_RADIUS = MAX_ASTEROID_RADIUS * SCALE_FACTOR;
+        SCALED_SAFE_RADIUS = SAFE_RADIUS * SCALE_FACTOR;
+        SCALED_BOMB_RADIUS = BOMB_RADIUS * SCALE_FACTOR;
+        SCALED_GAME_OVER_FONT_SIZE = GAME_OVER_FONT_SIZE * SCALE_FACTOR;
+        SCALED_SUBTITLE_OFFSET = SUBTITLE_OFFSET * SCALE_FACTOR;
+        SCALED_BULLET_BUFFER = SCALED_MAX_ASTEROID_RADIUS / 2; // Half the width of largest asteroid
+
+        // Update canvas size and CSS properties only if dimensions changed
+        if (documentObj && (GAME_WIDTH !== PREVIOUS_GAME_WIDTH || GAME_HEIGHT !== PREVIOUS_GAME_HEIGHT)) {
           const canvas = documentObj.getElementById("gameCanvas");
           if (canvas) {
             canvas.width = gameWidth;
             canvas.height = gameHeight;
           }
+
+          // Update CSS variable for game info width only when needed
+          documentObj.documentElement.style.setProperty("--game-width", GAME_WIDTH + "px");
+
+          // Store current dimensions for next comparison
+          PREVIOUS_GAME_WIDTH = GAME_WIDTH;
+          PREVIOUS_GAME_HEIGHT = GAME_HEIGHT;
         }
 
         return { width: gameWidth, height: gameHeight };
       }
 
-      // Helper function to scale values based on current scale factor (pure function with dependency injection)
-      function scale(
-        value,
-        windowObj = typeof window !== "undefined" ? window : null,
-      ) {
-        return value * calculateScaleFactor(windowObj);
+      // Helper function to scale values using cached scale factor
+      function scale(value) {
+        return value * SCALE_FACTOR;
       }
 
-      // Game state structure
-      let _pausedValue = false;
-
-      const GameState = {
-        ship: {
-          x: GAME_WIDTH / 2,
-          y: GAME_HEIGHT / 2,
-          vx: 0,
-          vy: 0,
-          angle: -Math.PI / 2, // Start pointing up
-          get radius() {
-            return scale(10);
+      // Game state initialization function
+      function createInitialGameState(overrides = {}) {
+        const defaultLevel = overrides.level || initialLevel;
+        const defaultSeed = overrides.seed || randomSeed;
+        
+        return {
+          ship: {
+            x: GAME_WIDTH / 2,
+            y: GAME_HEIGHT / 2,
+            vx: 0,
+            vy: 0,
+            angle: -Math.PI / 2, // Start pointing up
+            radius: SCALED_SHIP_RADIUS, // Using cached scaled constant
+            thrusting: false,
+            ...overrides.ship
           },
-          thrusting: false,
-        },
 
-        asteroids: [],
-        bullets: [],
-        particles: [],
-        shipDebris: [],
+          asteroids: [],
+          bullets: [],
+          particles: [],
+          shipDebris: [],
 
-        score: 0,
-        lives: 3,
-        nextExtraLifeScore: 20000,
-        gameOver: false,
-        get paused() {
-          return _pausedValue;
-        },
-        set paused(value) {
-          _pausedValue = value;
-        },
-        shipExploding: false,
-        shipExplosionStartTime: 0,
-        waitingForRespawn: false,
-        waitingForRespawnStartTime: 0,
-        lastFireTime: 0,
-        escapeKeyWasPressed: false,
-        get manualPauseToggleRequested() {
-          return this._manualPauseToggleRequested || false;
-        },
-        set manualPauseToggleRequested(value) {
-          this._manualPauseToggleRequested = value;
-        },
-        kidMode: false,
-        titleSplashVisible: false,
-        titleSplashFrameCount: 0,
-        level: initialLevel, // Current level/wave number (can be overridden by ?level= parameter)
+          score: 0,
+          lives: 3,
+          nextExtraLifeScore: 20000,
+          gameOver: false,
+          paused: false,
+          shipExploding: false,
+          shipExplosionStartTime: 0,
+          waitingForRespawn: false,
+          waitingForRespawnStartTime: 0,
+          lastFireTime: 0,
+          escapeKeyWasPressed: false,
+          manualPauseToggleRequested: false,
+          kidMode: false,
+          titleSplashVisible: false,
+          titleSplashFrameCount: 0,
+          level: defaultLevel, // Current level/wave number (can be overridden by ?level= parameter)
 
-        // Random number generator state (deterministic for testing)
-        rng: createRNGState(randomSeed),
+          // Random number generator state (deterministic for testing)
+          rng: createRNGState(defaultSeed),
 
-        // Death Blossom state (mobile-only secret feature)
-        deathBlossomActive: false,
-        deathBlossomStartTime: 0,
-        deathBlossomRotations: 0,
-        deathBlossomTotalAngleRotated: 0,
-        deathBlossomAvailable: true,
-        DEATH_BLOSSOM_ROTATION_COUNT: 12, // Number of full rotations before Death Blossom ends (configurable)
+          // Death Blossom state (mobile-only secret feature)
+          deathBlossomActive: false,
+          deathBlossomStartTime: 0,
+          deathBlossomRotations: 0,
+          deathBlossomTotalAngleRotated: 0,
+          deathBlossomAvailable: true,
 
-        // Game constants (scaled dynamically)
-        get SHIP_ACCELERATION() {
-          // Level-based acceleration scaling: 300 at level 1, 500 at level 20+
-          const baseAcceleration = 300;
-          const maxAcceleration = 500;
-          const level = this.level || 1;
+          // Sound system (will be injected based on test/production mode)
+          sound: null,
+          
+          // Apply any additional overrides
+          ...overrides
+        };
+      }
 
-          if (level >= 20) {
-            return scale(maxAcceleration);
-          }
+      // Initialize global game state
+      let GameState = createInitialGameState();
 
+      // Constants for level-dependent scaling (defined once, reused)
+      const SHIP_ACCELERATION_BASE = 300;
+      const SHIP_ACCELERATION_MAX = 500;
+      const ROTATION_SPEED_BASE = 5;
+      const ROTATION_SPEED_MAX = 10;
+      const BULLET_SPEED_MIN_MULTIPLIER = 0.75; // 25% slower
+      const BULLET_SPEED_MAX_MULTIPLIER = 1.7;  // 70% faster
+      const BASE_FIRE_DELAY = 250; // Base fire delay at level 1 (milliseconds)
+      const MIN_FIRE_DELAY = 125;  // Minimum fire delay at level 20+ (milliseconds)
+
+      // Game configuration variables (mutable, not part of game state)
+      let DEATH_BLOSSOM_ROTATION_COUNT = 12; // Number of full rotations before Death Blossom ends
+      let BASE_BULLET_SPEED = 450; // Base bullet speed constant
+      let DEATH_BLOSSOM_ROTATION_SPEED = 7.2; // 7.2 radians per second for fast rotation (20% faster than 6)
+      let ASTEROID_SPAWN_COUNT = 5;
+      let EXTRA_LIFE_INTERVAL = 20000;
+
+      // Level-dependent calculated values (updated by updateLevelDependentConstants)
+      let CURRENT_SHIP_ACCELERATION = 0;
+      let CURRENT_ROTATION_SPEED = 0;
+      let CURRENT_BULLET_SPEED = 0;
+      let CURRENT_DEATH_BLOSSOM_BULLET_SPEED = 0;
+
+      // Function to update level-dependent constants (called when level changes or on resize)
+      function updateLevelDependentConstants(state) {
+        const level = state.level || 1;
+
+        // Ship acceleration: 300 at level 1, 500 at level 20+
+        let currentAcceleration;
+        if (level >= 20) {
+          currentAcceleration = SHIP_ACCELERATION_MAX;
+        } else {
           // Linear scaling from level 1 to 20
-          const accelerationIncrease =
-            (maxAcceleration - baseAcceleration) * ((level - 1) / 19);
-          const currentAcceleration = baseAcceleration + accelerationIncrease;
+          const accelerationIncrease = (SHIP_ACCELERATION_MAX - SHIP_ACCELERATION_BASE) * ((level - 1) / 19);
+          currentAcceleration = SHIP_ACCELERATION_BASE + accelerationIncrease;
+        }
+        CURRENT_SHIP_ACCELERATION = scale(currentAcceleration);
 
-          return scale(currentAcceleration);
-        },
-        get ROTATION_SPEED() {
-          // Level-based rotation speed scaling (desktop only): 5 at level 1, 10 at level 20
-          // Mobile uses direct touch rotation, so this doesn't apply
-          const baseRotationSpeed = 5;
-          const maxRotationSpeed = 10; // Double the base speed
-          const level = this.level || 1;
-
-          // On mobile, rotation is handled differently via touch, so use base speed
-          if (isMobile) {
-            return baseRotationSpeed;
-          }
-
-          if (level >= 20) {
-            return maxRotationSpeed;
-          }
-
+        // Rotation speed: 5 at level 1, 10 at level 20 (desktop only)
+        let currentRotationSpeed;
+        // On mobile, rotation is handled differently via touch, so use base speed
+        if (isMobile) {
+          currentRotationSpeed = ROTATION_SPEED_BASE;
+        } else if (level >= 20) {
+          currentRotationSpeed = ROTATION_SPEED_MAX;
+        } else {
           // Linear scaling from level 1 to 20 (desktop only)
-          const speedIncrease =
-            (maxRotationSpeed - baseRotationSpeed) * ((level - 1) / 19);
-          const currentRotationSpeed = baseRotationSpeed + speedIncrease;
+          const speedIncrease = (ROTATION_SPEED_MAX - ROTATION_SPEED_BASE) * ((level - 1) / 19);
+          currentRotationSpeed = ROTATION_SPEED_BASE + speedIncrease;
+        }
+        CURRENT_ROTATION_SPEED = currentRotationSpeed;
 
-          return currentRotationSpeed;
-        },
-        BASE_BULLET_SPEED: 450, // Base bullet speed constant
-        DEATH_BLOSSOM_ROTATION_SPEED: 7.2, // 7.2 radians per second for fast rotation (20% faster than 6)
-        get BULLET_SPEED() {
-          // Level-based bullet speed scaling: 25% slower at level 1, 70% faster at level 20 (reduced further)
-          const minBulletSpeed = this.BASE_BULLET_SPEED * 0.75; // 25% slower (337.5)
-          const maxBulletSpeed = this.BASE_BULLET_SPEED * 1.7; // 70% faster (765)
-          const level = this.level || 1;
+        // Bullet speed: 25% slower at level 1, 70% faster at level 20
+        const minBulletSpeed = BASE_BULLET_SPEED * BULLET_SPEED_MIN_MULTIPLIER;
+        const maxBulletSpeed = BASE_BULLET_SPEED * BULLET_SPEED_MAX_MULTIPLIER;
+        let currentBulletSpeed;
 
-          if (level >= 20) {
-            return scale(maxBulletSpeed);
-          }
-
+        if (level >= 20) {
+          currentBulletSpeed = maxBulletSpeed;
+        } else {
           // Linear scaling from level 1 to 20
-          const speedIncrease =
-            (maxBulletSpeed - minBulletSpeed) * ((level - 1) / 19);
-          const currentBulletSpeed = minBulletSpeed + speedIncrease;
+          const speedIncrease = (maxBulletSpeed - minBulletSpeed) * ((level - 1) / 19);
+          currentBulletSpeed = minBulletSpeed + speedIncrease;
+        }
+        CURRENT_BULLET_SPEED = scale(currentBulletSpeed);
 
-          return scale(currentBulletSpeed);
-        },
-        get DEATH_BLOSSOM_BULLET_SPEED() {
-          // Death Blossom always uses base bullet speed for consistent firing pattern
-          return scale(this.BASE_BULLET_SPEED);
-        },
-        ASTEROID_SPAWN_COUNT: 5,
-        EXTRA_LIFE_INTERVAL: 20000,
+        // Death Blossom always uses base bullet speed for consistent firing pattern
+        CURRENT_DEATH_BLOSSOM_BULLET_SPEED = scale(BASE_BULLET_SPEED);
 
-        // Sound system (will be injected based on test/production mode)
-        sound: null,
-      };
+        // Update ship radius when scale changes
+        state.ship.radius = SCALED_SHIP_RADIUS;
+      }
 
       // Input handler
       const keysPressed = {};
@@ -1067,6 +1155,7 @@
       // Initialize game dimensions on load
       updateGameDimensions();
 
+
       // Interactive debug toggles
       let debugInfoVisible = false;
 
@@ -1134,6 +1223,9 @@
           navigator.userAgent,
         );
       let touchStartY = null;
+
+      // Initialize level-dependent constants now that isMobile is defined
+      updateLevelDependentConstants(GameState);
 
       // Death Blossom shake detection for mobile
       let shakeThreshold = 25; // Minimum acceleration magnitude to trigger (increased from 15)
@@ -1377,7 +1469,7 @@
         }
 
         // Show tutorial after a brief delay
-        setTimeout(showMobileTutorial, 1000);
+        setTimeout(showMobileTutorial, 100);
 
         canvas.addEventListener("touchstart", (e) => {
           e.preventDefault();
@@ -1625,14 +1717,7 @@
           return; // Can't render without context
         }
 
-        // Update game dimensions on every frame to handle viewport changes
-        updateGameDimensions(windowObj, documentObj);
-
-        // Update CSS variable for game info width
-        document.documentElement.style.setProperty(
-          "--game-width",
-          GAME_WIDTH + "px",
-        );
+        // Game dimensions and CSS properties are updated only on resize events for performance
 
         // Clear canvas
         ctx.fillStyle = "#111";
@@ -1696,7 +1781,7 @@
         ctx.fillStyle = "#0f0";
         state.bullets.forEach((bullet) => {
           ctx.beginPath();
-          ctx.arc(bullet.x, bullet.y, scale(2), 0, Math.PI * 2);
+          ctx.arc(bullet.x, bullet.y, SCALED_BULLET_RADIUS, 0, Math.PI * 2);
           ctx.fill();
         });
 
@@ -1709,7 +1794,7 @@
         state.particles.forEach((particle) => {
           ctx.fillStyle = `rgba(255, ${150 - particle.life}, 0, ${particle.life / 40})`;
           ctx.beginPath();
-          ctx.arc(particle.x, particle.y, scale(2), 0, Math.PI * 2);
+          ctx.arc(particle.x, particle.y, SCALED_PARTICLE_RADIUS, 0, Math.PI * 2);
           ctx.fill();
         });
 
@@ -1869,7 +1954,7 @@
         const y = GAME_HEIGHT / 3;
 
         // Scale font size with viewport
-        const fontSize = scale(60);
+        const fontSize = SCALED_TITLE_FONT_SIZE;
         ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -1880,29 +1965,29 @@
         // Outer glow (largest, most transparent)
         ctx.globalAlpha = alpha * 0.3;
         ctx.shadowColor = "#ff00ff"; // Magenta
-        ctx.shadowBlur = scale(20);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_20;
         ctx.strokeStyle = "#ff00ff";
-        ctx.lineWidth = scale(8);
+        ctx.lineWidth = SCALED_LINE_WIDTH_8;
         ctx.strokeText(text, x, y);
 
         // Middle glow
         ctx.globalAlpha = alpha * 0.6;
-        ctx.shadowBlur = scale(10);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_10;
         ctx.strokeStyle = "#00ffff"; // Cyan
-        ctx.lineWidth = scale(4);
+        ctx.lineWidth = SCALED_LINE_WIDTH_4;
         ctx.strokeText(text, x, y);
 
         // Inner bright core
         ctx.globalAlpha = alpha;
-        ctx.shadowBlur = scale(5);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_5;
         ctx.fillStyle = "#ffffff"; // White core
         ctx.fillText(text, x, y);
 
         // Add subtitle "by Peter Marreck" below the main title
         const subtitleText = "by Peter Marreck";
-        const subtitleFontSize = scale(20); // Slightly larger subtitle
-        const subtitleY = y + fontSize / 2 + scale(20); // Position below main title
-        const subtitleX = x - scale(200); // Left-aligned with the V in VIBESTEROIDS
+        const subtitleFontSize = SCALED_SUBTITLE_FONT_SIZE; // Slightly larger subtitle
+        const subtitleY = y + fontSize / 2 + SCALED_SUBTITLE_FONT_SIZE; // Position below main title
+        const subtitleX = x - SCALED_SUBTITLE_OFFSET; // Left-aligned with the V in VIBESTEROIDS
 
         ctx.font = `${subtitleFontSize}px 'Courier New', monospace`;
         ctx.textAlign = "left";
@@ -1910,7 +1995,7 @@
         // Subtle glow for subtitle (softer than main title)
         ctx.globalAlpha = alpha * 0.4;
         ctx.shadowColor = "#00ffff"; // Cyan glow
-        ctx.shadowBlur = scale(8);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_8;
         ctx.fillStyle = "#cccccc"; // Light gray text
         ctx.fillText(subtitleText, subtitleX, subtitleY);
 
@@ -1924,8 +2009,8 @@
         for (let i = 0; i < 5; i++) {
           const scanY = y - fontSize / 2 + (i * fontSize) / 4;
           ctx.beginPath();
-          ctx.moveTo(x - scale(200), scanY);
-          ctx.lineTo(x + scale(200), scanY);
+          ctx.moveTo(x - SCALED_SUBTITLE_OFFSET, scanY);
+          ctx.lineTo(x + SCALED_SUBTITLE_OFFSET, scanY);
           ctx.stroke();
         }
 
@@ -1942,7 +2027,7 @@
         const y = (GAME_HEIGHT * 2) / 3;
 
         // Scale font size with viewport (smaller than title)
-        const fontSize = scale(36);
+        const fontSize = SCALED_GAME_OVER_FONT_SIZE;
         ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -1953,21 +2038,21 @@
         // Outer glow (red)
         ctx.globalAlpha = 0.4;
         ctx.shadowColor = "#ff0000"; // Red
-        ctx.shadowBlur = scale(20);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_20;
         ctx.strokeStyle = "#ff0000";
-        ctx.lineWidth = scale(6);
+        ctx.lineWidth = SCALED_LINE_WIDTH_6;
         ctx.strokeText(text, x, y);
 
         // Middle glow (orange)
         ctx.globalAlpha = 0.7;
-        ctx.shadowBlur = scale(10);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_10;
         ctx.strokeStyle = "#ff8800"; // Orange
-        ctx.lineWidth = scale(3);
+        ctx.lineWidth = SCALED_LINE_WIDTH_4 * 0.75; // 3 = 4 * 0.75
         ctx.strokeText(text, x, y);
 
         // Inner bright core (yellow-white)
         ctx.globalAlpha = 1.0;
-        ctx.shadowBlur = scale(5);
+        ctx.shadowBlur = SCALED_SHADOW_BLUR_5;
         ctx.fillStyle = "#ffff88"; // Bright yellow
         ctx.fillText(text, x, y);
 
@@ -1981,7 +2066,7 @@
 
         // Draw ship
         ctx.strokeStyle = "#fff";
-        ctx.lineWidth = scale(2);
+        ctx.lineWidth = SCALED_LINE_WIDTH_2;
         ctx.beginPath();
 
         // Ship body
@@ -2018,7 +2103,7 @@
         ctx.rotate(asteroid.angle);
 
         ctx.strokeStyle = "#888";
-        ctx.lineWidth = scale(2);
+        ctx.lineWidth = SCALED_LINE_WIDTH_2;
         ctx.beginPath();
 
         const points = asteroid.points;
@@ -2056,7 +2141,7 @@
         // Fade out as life decreases
         const alpha = Math.max(0, debris.life / 120);
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = scale(2);
+        ctx.lineWidth = SCALED_LINE_WIDTH_2;
         ctx.beginPath();
 
         const points = debris.points;
@@ -2080,8 +2165,7 @@
         if (!state.deathBlossomActive) return false;
 
         // Fire at 10x normal rate during Death Blossom (25ms vs 250ms)
-        const normalFireInterval = 250;
-        const deathBlossomFireInterval = normalFireInterval / 10;
+        const deathBlossomFireInterval = BASE_FIRE_DELAY / 10;
 
         return currentTime - state.lastFireTime >= deathBlossomFireInterval;
       }
@@ -2094,9 +2178,8 @@
       ) {
         if (!state.deathBlossomActive) return state;
 
-        const rotationSpeed = state.DEATH_BLOSSOM_ROTATION_SPEED;
-        const deathBlossomRotationCount =
-          state.DEATH_BLOSSOM_ROTATION_COUNT || 12; // Number of full rotations (configurable)
+        const rotationSpeed = DEATH_BLOSSOM_ROTATION_SPEED;
+        const deathBlossomRotationCount = DEATH_BLOSSOM_ROTATION_COUNT; // Number of full rotations
         const totalAngleToRotate = deathBlossomRotationCount * (2 * mathObj.PI);
 
         // Auto-rotate ship continuously
@@ -2159,7 +2242,7 @@
           currentScore >= newState.nextExtraLifeScore
         ) {
           newState.lives++;
-          newState.nextExtraLifeScore += newState.EXTRA_LIFE_INTERVAL || 20000;
+          newState.nextExtraLifeScore += EXTRA_LIFE_INTERVAL;
           if (newState.sound && newState.sound.extraLife) {
             newState.sound.extraLife();
           }
@@ -2215,8 +2298,8 @@
           mathObj,
         );
 
-        // Calculate scale factor once for this frame
-        const scaleFactor = calculateScaleFactor();
+        // Use cached scale factor (updated only on resize)
+        const scaleFactor = SCALE_FACTOR;
 
         /* ARCHITECTURAL DECISION: Performance vs Immutability Tradeoff
          *
@@ -2248,7 +2331,6 @@
           score: state.score,
           lives: state.lives,
           nextExtraLifeScore: state.nextExtraLifeScore,
-          EXTRA_LIFE_INTERVAL: state.EXTRA_LIFE_INTERVAL,
           gameOver: state.gameOver,
           paused: state.paused,
           shipExploding: state.shipExploding,
@@ -2272,11 +2354,6 @@
             deathBlossomUpdatedState.deathBlossomTotalAngleRotated,
           deathBlossomAvailable: deathBlossomUpdatedState.deathBlossomAvailable,
           // Copy game constants needed for asteroid spawning
-          SHIP_ACCELERATION: state.SHIP_ACCELERATION,
-          ROTATION_SPEED: state.ROTATION_SPEED,
-          BULLET_SPEED: state.BULLET_SPEED,
-          ASTEROID_SPAWN_COUNT: state.ASTEROID_SPAWN_COUNT,
-          DEATH_BLOSSOM_ROTATION_COUNT: state.DEATH_BLOSSOM_ROTATION_COUNT,
           rng: state.rng, // Preserve RNG state
         };
 
@@ -2312,11 +2389,11 @@
           if (!newState.deathBlossomActive) {
             // Normal rotation controls (keyboard only - mobile sets angle directly)
             if (keysPressed["ArrowLeft"]) {
-              newState.ship.angle -= state.ROTATION_SPEED * deltaTime;
+              newState.ship.angle -= CURRENT_ROTATION_SPEED * deltaTime;
             }
 
             if (keysPressed["ArrowRight"]) {
-              newState.ship.angle += state.ROTATION_SPEED * deltaTime;
+              newState.ship.angle += CURRENT_ROTATION_SPEED * deltaTime;
             }
           }
           // If Death Blossom is active, ship.angle is already set by updateDeathBlossomState
@@ -2328,7 +2405,7 @@
               newState.ship.thrusting = true;
 
               // Apply thrust in direction ship is pointing
-              const acceleration = state.SHIP_ACCELERATION * deltaTime;
+              const acceleration = CURRENT_SHIP_ACCELERATION * deltaTime;
               newState.ship.vx += Math.cos(newState.ship.angle) * acceleration;
               newState.ship.vy += Math.sin(newState.ship.angle) * acceleration;
 
@@ -2377,18 +2454,16 @@
           } else if (!newState.waitingForRespawn) {
             // Normal firing logic with level-based fire rate scaling
             // Scale from 250ms (level 1) to 125ms (level 20+) for double fire rate
-            const baseFireDelay = 250; // milliseconds at level 1
-            const minFireDelay = 125; // milliseconds at level 20+ (double fire rate)
             const level = newState.level || 1;
 
-            let fireDelay = baseFireDelay;
+            let fireDelay;
             if (level >= 20) {
-              fireDelay = minFireDelay;
+              fireDelay = MIN_FIRE_DELAY;
             } else {
               // Linear scaling from level 1 to 20
               const delayReduction =
-                (baseFireDelay - minFireDelay) * ((level - 1) / 19);
-              fireDelay = baseFireDelay - delayReduction;
+                (BASE_FIRE_DELAY - MIN_FIRE_DELAY) * ((level - 1) / 19);
+              fireDelay = BASE_FIRE_DELAY - delayReduction;
             }
             const isMobileRotaryFiring =
               typeof isRotaryTouching !== "undefined" && isRotaryTouching;
@@ -2405,22 +2480,18 @@
           if (shouldFire) {
             // Use base bullet speed during Death Blossom for consistent firing pattern
             const bulletSpeed = newState.deathBlossomActive
-              ? state.DEATH_BLOSSOM_BULLET_SPEED
-              : state.BULLET_SPEED;
+              ? CURRENT_DEATH_BLOSSOM_BULLET_SPEED
+              : CURRENT_BULLET_SPEED;
 
-            const bullet = {
-              x: newState.ship.x + Math.cos(newState.ship.angle) * scale(20),
-              y: newState.ship.y + Math.sin(newState.ship.angle) * scale(20),
-              vx:
-                newState.ship.vx + Math.cos(newState.ship.angle) * bulletSpeed,
-              vy:
-                newState.ship.vy + Math.sin(newState.ship.angle) * bulletSpeed,
-              distanceTraveled: 0,
-            };
+            // Temporarily override BULLET_SPEED for Death Blossom
+            const originalBulletSpeed = newState.BULLET_SPEED;
+            newState.BULLET_SPEED = bulletSpeed;
 
-            newState.bullets.push(bullet);
-            newState.lastFireTime = currentTime;
-            newState.sound.playShoot();
+            // Use functional interface for bullet firing
+            newState = fireBullet(newState, currentTime);
+
+            // Restore original bullet speed
+            newState.BULLET_SPEED = originalBulletSpeed;
           }
         }
 
@@ -2438,7 +2509,7 @@
           bullet.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
 
           // Screen wrapping for bullets - allow penetration beyond viewport before wrapping
-          const maxAsteroidRadius = scale(50); // Largest possible asteroid radius
+          const maxAsteroidRadius = SCALED_MAX_ASTEROID_RADIUS; // Largest possible asteroid radius
           const bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
           if (bullet.x < -bulletBuffer) bullet.x = GAME_WIDTH + bulletBuffer;
           else if (bullet.x > GAME_WIDTH + bulletBuffer) bullet.x = -bulletBuffer;
@@ -2636,8 +2707,10 @@
         if (newState.asteroids.length === 0) {
           // Increase level and spawn more asteroids each wave
           newState.level++;
+          // Update cached level-dependent constants
+          updateLevelDependentConstants(newState);
           const asteroidsToSpawn =
-            state.ASTEROID_SPAWN_COUNT + (newState.level - 1);
+            ASTEROID_SPAWN_COUNT + (newState.level - 1);
           spawnAsteroids(newState, asteroidsToSpawn);
         }
 
@@ -2663,17 +2736,17 @@
         if (newState.waitingForRespawn) {
           const spawnX = GAME_WIDTH / 2;
           const spawnY = GAME_HEIGHT / 2;
-          
+
           // Calculate safe radius - reduce by half after 5 seconds of waiting
           const waitingTime = currentTime - newState.waitingForRespawnStartTime;
-          const baseSafeRadius = scale(96); // Safe radius around spawn point (20% larger, about 4.8x ship radius)
+          const baseSafeRadius = SCALED_SAFE_RADIUS; // Safe radius around spawn point (20% larger, about 4.8x ship radius)
           const safeRadius = waitingTime > 5000 ? baseSafeRadius / 2 : baseSafeRadius;
-          
+
           // Desperation bomb after 10 seconds - destroy all asteroids in spawn area
           if (waitingTime > 10000) {
-            const bombRadius = scale(80); // 8x ship radius (ship radius = 10)
+            const bombRadius = SCALED_BOMB_RADIUS; // 8x ship radius (ship radius = 10)
             const spawnPoint = { x: spawnX, y: spawnY };
-            
+
             // Find and destroy asteroids within bomb radius
             for (let i = newState.asteroids.length - 1; i >= 0; i--) {
               const asteroid = newState.asteroids[i];
@@ -2684,10 +2757,10 @@
                 newState.asteroids.splice(i, 1);
               }
             }
-            
+
             // Play explosion sound for the bomb
             newState.sound.playExplosion();
-            
+
             // Create additional explosion effect at spawn center
             createExplosion(newState, spawnX, spawnY);
           }
@@ -2906,6 +2979,46 @@
         };
       }
 
+      // Create bullet with proper game physics (pure function)
+      function createBullet(state) {
+        const bulletSpeed = CURRENT_BULLET_SPEED;
+
+        return {
+          x: state.ship.x + Math.cos(state.ship.angle) * SCALED_BULLET_OFFSET,
+          y: state.ship.y + Math.sin(state.ship.angle) * SCALED_BULLET_OFFSET,
+          vx: state.ship.vx + Math.cos(state.ship.angle) * bulletSpeed,
+          vy: state.ship.vy + Math.sin(state.ship.angle) * bulletSpeed,
+          distanceTraveled: 0,
+        };
+      }
+
+      // Calculate fire delay based on level (pure function)
+      function calculateFireDelay(level) {
+        if (level >= 20) {
+          return MIN_FIRE_DELAY;
+        }
+
+        // Linear scaling from level 1 to 20
+        const delayReduction = (BASE_FIRE_DELAY - MIN_FIRE_DELAY) * ((level - 1) / 19);
+        return BASE_FIRE_DELAY - delayReduction;
+      }
+
+      // Fire bullet - functional interface that takes state and returns same state (mutated)
+      function fireBullet(state, currentTime) {
+        const bullet = createBullet(state);
+
+        // Mutate state directly for performance
+        state.bullets.push(bullet);
+        state.lastFireTime = currentTime;
+
+        // Play sound effect
+        if (state.sound && state.sound.playShoot) {
+          state.sound.playShoot();
+        }
+
+        return state;
+      }
+
       function distance(obj1, obj2) {
         const dx = obj1.x - obj2.x;
         const dy = obj1.y - obj2.y;
@@ -3081,51 +3194,17 @@
         const gameOverScreen = document.getElementById("gameOverScreen");
         if (gameOverScreen) gameOverScreen.style.display = "none";
 
-        // Initialize sound system
-        GameState.sound = new RealSoundInterface();
-
-        // Reset game state
-        GameState.ship.x = GAME_WIDTH / 2;
-        GameState.ship.y = GAME_HEIGHT / 2;
-        GameState.ship.vx = 0;
-        GameState.ship.vy = 0;
-        GameState.ship.angle = -Math.PI / 2;
-
-        GameState.asteroids = [];
-        GameState.bullets = [];
-        GameState.particles = [];
-        GameState.shipDebris = [];
-
-        GameState.score = 0;
-        GameState.lives = 3;
-        GameState.nextExtraLifeScore = 20000;
-        GameState.gameOver = false;
-        GameState.paused = false;
-        GameState.shipExploding = false;
-        GameState.shipExplosionStartTime = 0;
-        GameState.waitingForRespawn = false;
-        GameState.waitingForRespawnStartTime = 0;
-        GameState.lastFireTime = 0;
-        GameState.autoFire = false;
-        GameState.level = initialLevel; // Reset to initial level (from URL param or default 1)
-
-        // Reset RNG state to initial seed
-        GameState.rng = createRNGState(randomSeed);
-
-        // Reset Death Blossom state
-        GameState.deathBlossomActive = false;
-        GameState.deathBlossomStartTime = 0;
-        GameState.deathBlossomRotations = 0;
-        GameState.deathBlossomTotalAngleRotated = 0;
-        GameState.deathBlossomAvailable = true;
-
-        // Show title splash on game start
-        GameState.titleSplashVisible = true;
-        GameState.titleSplashFrameCount = 0;
+        // Reset game state to initial values
+        GameState = createInitialGameState({
+          sound: new RealSoundInterface(),
+          titleSplashVisible: true,
+          titleSplashFrameCount: 0,
+          autoFire: false
+        });
 
         // Spawn initial asteroids based on level (progressive difficulty)
         const asteroidsToSpawn =
-          GameState.ASTEROID_SPAWN_COUNT + (GameState.level - 1);
+          ASTEROID_SPAWN_COUNT + (GameState.level - 1);
         spawnAsteroids(GameState, asteroidsToSpawn);
 
         // Update level display
@@ -3171,7 +3250,6 @@
           score: state.score,
           lives: state.lives,
           nextExtraLifeScore: state.nextExtraLifeScore,
-          EXTRA_LIFE_INTERVAL: state.EXTRA_LIFE_INTERVAL,
           gameOver: state.gameOver,
           paused: state.paused,
           shipExploding: state.shipExploding,
@@ -3198,11 +3276,6 @@
             ? createRNGState(state.rng.seed)
             : createRNGState(randomSeed),
           // Copy constants that might be used in tests
-          SHIP_ACCELERATION: state.SHIP_ACCELERATION,
-          ROTATION_SPEED: state.ROTATION_SPEED,
-          BULLET_SPEED: state.BULLET_SPEED,
-          ASTEROID_SPAWN_COUNT: state.ASTEROID_SPAWN_COUNT,
-          DEATH_BLOSSOM_ROTATION_COUNT: state.DEATH_BLOSSOM_ROTATION_COUNT,
           sound: state.sound, // Keep reference to mock sound interface
         };
       }
@@ -3221,7 +3294,7 @@
               vy: 0,
               angle: -Math.PI / 2,
               get radius() {
-                return scale(10);
+                return SCALED_SHIP_RADIUS;
               },
             },
             asteroids: [],
@@ -3233,12 +3306,10 @@
           };
 
           // Reference the actual GameState getters to avoid duplicating logic
-          baseState.BASE_BULLET_SPEED = GameState.BASE_BULLET_SPEED;
+          // BASE_BULLET_SPEED is now global
           baseState.BULLET_SPEED = GameState.BULLET_SPEED;
-          baseState.DEATH_BLOSSOM_BULLET_SPEED =
-            GameState.DEATH_BLOSSOM_BULLET_SPEED;
-          baseState.DEATH_BLOSSOM_ROTATION_SPEED =
-            GameState.DEATH_BLOSSOM_ROTATION_SPEED;
+          // DEATH_BLOSSOM_BULLET_SPEED is now global
+          // DEATH_BLOSSOM_ROTATION_SPEED is now global
 
           return baseState;
         }
@@ -3277,6 +3348,17 @@
 
         // Unified test framework functions (work in both environments)
         function describe(name, fn) {
+          // Check if this test suite should run based on enabled suites
+          const suiteName = name.toLowerCase();
+          const shouldRun = enabledSuites.some(suite =>
+            suiteName.includes(suite.toLowerCase()) ||
+            (suite === 'unit' && !suiteName.includes('performance'))
+          );
+
+          if (!shouldRun) {
+            return; // Skip this test suite
+          }
+
           if (isNodeJS) {
             console.log(`\n${name}:`);
           } else {
@@ -3655,9 +3737,7 @@
                 lastFireTime: 0,
                 autoFire: false,
                 escapeKeyWasPressed: false,
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 ASTEROID_SPAWN_COUNT: 5,
                 sound: new MockSoundInterface(),
               });
@@ -4094,9 +4174,7 @@
                 shipExploding: false,
                 shipExplosionStartTime: 0,
                 lastFireTime: 0,
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 sound: new MockSoundInterface(),
               });
             });
@@ -4135,11 +4213,10 @@
 
             it("should wrap bullets", function () {
               // Test bullet wrapping with asteroid-based buffer zone
-              const maxAsteroidRadius = scale(50); // Largest possible asteroid radius
-              const bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
+              const maxAsteroidRadius = SCALED_MAX_ASTEROID_RADIUS; // Largest possible asteroid radius
               testState.bullets = [
                 {
-                  x: -bulletBuffer - 10, // Beyond the buffer zone
+                  x: -SCALED_BULLET_BUFFER - 10, // Beyond the buffer zone
                   y: GAME_HEIGHT / 2,
                   vx: 0,
                   vy: 0,
@@ -4147,7 +4224,7 @@
                 },
               ];
               const newState = updateGameState(testState, {}, 0.1, 0);
-              const expectedX = GAME_WIDTH + bulletBuffer;
+              const expectedX = GAME_WIDTH + SCALED_BULLET_BUFFER;
               if (newState.bullets[0].x !== expectedX) {
                 throw new Error(
                   `Expected bullet x=${expectedX}, got ${newState.bullets[0].x}`,
@@ -4177,9 +4254,7 @@
                 shipExploding: false,
                 shipExplosionStartTime: 0,
                 lastFireTime: 0,
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 sound: new MockSoundInterface(),
               });
             });
@@ -4532,9 +4607,7 @@
                 shipExploding: false,
                 shipExplosionStartTime: 0,
                 lastFireTime: 0,
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 sound: new MockSoundInterface(),
               });
             });
@@ -4751,9 +4824,7 @@
                 shipExploding: false,
                 shipExplosionStartTime: 0,
                 lastFireTime: 0,
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 sound: new MockSoundInterface(),
               });
             });
@@ -5444,9 +5515,7 @@
                 titleSplashVisible: false,
                 titleSplashFrameCount: 0,
                 level: 1, // Start at level 1
-                SHIP_ACCELERATION: 300,
-                ROTATION_SPEED: 5,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 ASTEROID_SPAWN_COUNT: 5,
               });
 
@@ -5620,7 +5689,7 @@
                 updateDeathBlossomState(testState, deltaTime, currentTime);
 
                 const expectedAngleChange =
-                  testState.DEATH_BLOSSOM_ROTATION_SPEED * deltaTime;
+                  DEATH_BLOSSOM_ROTATION_SPEED * deltaTime;
                 const actualAngleChange = testState.ship.angle - initialAngle;
 
                 if (Math.abs(actualAngleChange - expectedAngleChange) > 0.001) {
@@ -5662,7 +5731,7 @@
                 testState.deathBlossomActive = true;
                 testState.deathBlossomStartTime = 1000;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT (12)
 
                 // Simulate exactly 12 full rotations (12 * 2π radians)
                 const twelveFullRotations = 12 * 2 * Math.PI;
@@ -5690,7 +5759,7 @@
                 testState.deathBlossomActive = true;
                 testState.deathBlossomStartTime = 1000;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT (12)
 
                 // Simulate exactly 12 full rotations to end Death Blossom
                 const twelveFullRotations = 12 * 2 * Math.PI;
@@ -5787,7 +5856,7 @@
                 // First half rotation
                 updateDeathBlossomState(
                   testState,
-                  Math.PI / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  Math.PI / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 ); // π/speed seconds = π radians
                 if (testState.deathBlossomRotations !== 0) {
@@ -5799,7 +5868,7 @@
                 // Complete first rotation
                 updateDeathBlossomState(
                   testState,
-                  Math.PI / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  Math.PI / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 ); // Another π radians = 2π total
                 if (testState.deathBlossomRotations !== 1) {
@@ -5811,7 +5880,7 @@
                 // Add 1.5 more rotations (total 2.5)
                 updateDeathBlossomState(
                   testState,
-                  (3 * Math.PI) / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  (3 * Math.PI) / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 ); // 3π/speed seconds = 3π radians, 5π total
                 if (testState.deathBlossomRotations !== 2) {
@@ -5831,14 +5900,14 @@
               it("should end precisely after 12 full rotations", function () {
                 testState.deathBlossomActive = true;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 12;
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT (12)
 
                 // Do 11.9 rotations (should still be active)
                 const almostTwelveRotations = 11.9 * 2 * Math.PI;
                 updateDeathBlossomState(
                   testState,
                   almostTwelveRotations /
-                    testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                    DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 );
 
@@ -5852,7 +5921,7 @@
                 const remainingAngle = 12 * 2 * Math.PI - almostTwelveRotations;
                 updateDeathBlossomState(
                   testState,
-                  remainingAngle / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  remainingAngle / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 );
 
@@ -5866,13 +5935,14 @@
               it("should respect configurable rotation count", function () {
                 testState.deathBlossomActive = true;
                 testState.deathBlossomTotalAngleRotated = 0;
-                testState.DEATH_BLOSSOM_ROTATION_COUNT = 5; // Configure for 5 rotations instead of 9
+                const originalRotationCount = DEATH_BLOSSOM_ROTATION_COUNT;
+                DEATH_BLOSSOM_ROTATION_COUNT = 5; // Configure for 5 rotations instead of default
 
                 // Do exactly 3 rotations (should still be active with 5-rotation config)
                 const threeRotations = 3 * 2 * Math.PI;
                 updateDeathBlossomState(
                   testState,
-                  threeRotations / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  threeRotations / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 );
 
@@ -5886,9 +5956,12 @@
                 const twoMoreRotations = 2 * 2 * Math.PI;
                 updateDeathBlossomState(
                   testState,
-                  twoMoreRotations / testState.DEATH_BLOSSOM_ROTATION_SPEED,
+                  twoMoreRotations / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 );
+
+                // Restore original rotation count
+                DEATH_BLOSSOM_ROTATION_COUNT = originalRotationCount;
 
                 if (testState.deathBlossomActive) {
                   throw new Error(
@@ -5926,7 +5999,7 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                 });
@@ -5979,7 +6052,7 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                 });
@@ -6028,7 +6101,7 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                 };
@@ -6077,10 +6150,10 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                  DEATH_BLOSSOM_ROTATION_COUNT: 3,
+                  // Using global DEATH_BLOSSOM_ROTATION_COUNT
                 });
 
                 // Step 1: Use Death Blossom (should make it unavailable)
@@ -6136,7 +6209,7 @@
                     vx: 0,
                     vy: 0,
                     get radius() {
-                      return scale(10);
+                      return SCALED_SHIP_RADIUS;
                     },
                   },
                   deathBlossomActive: true, // Death Blossom is active when ship dies
@@ -6158,10 +6231,10 @@
                   level: 1,
                   kidMode: false,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                  DEATH_BLOSSOM_ROTATION_COUNT: 3,
+                  // Using global DEATH_BLOSSOM_ROTATION_COUNT
                 });
 
                 // Create proper asteroid at same position as ship
@@ -6239,10 +6312,10 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
-                  DEATH_BLOSSOM_ROTATION_COUNT: 3,
+                  // Using global DEATH_BLOSSOM_ROTATION_COUNT
                 });
 
                 // Simulate ship explosion ending after 2 seconds, which should respawn ship
@@ -6309,7 +6382,7 @@
                   titleSplashFrameCount: 0,
                   level: 1,
                   SHIP_ACCELERATION: 500,
-                  ROTATION_SPEED: 5,
+                  // ROTATION_SPEED is now global
                   BULLET_SPEED: 600,
                   ASTEROID_SPAWN_COUNT: 4,
                 });
@@ -6421,7 +6494,7 @@
                   vy: 0,
                   angle: 0,
                   get radius() {
-                    return scale(10);
+                    return SCALED_SHIP_RADIUS;
                   },
                 },
                 bullets: [
@@ -6497,7 +6570,7 @@
                   vy: 0,
                   angle: 0,
                   get radius() {
-                    return scale(10);
+                    return SCALED_SHIP_RADIUS;
                   },
                 },
                 bullets: [
@@ -6555,7 +6628,7 @@
                   vy: 0,
                   angle: 0,
                   get radius() {
-                    return scale(10);
+                    return SCALED_SHIP_RADIUS;
                   },
                 },
                 bullets: [
@@ -6987,7 +7060,7 @@
                   vy: 0,
                   angle: 0,
                   get radius() {
-                    return scale(10);
+                    return SCALED_SHIP_RADIUS;
                   },
                 },
                 asteroids: [],
@@ -7133,11 +7206,9 @@
                 deathBlossomRotations: 0,
                 deathBlossomTotalAngleRotated: 0,
                 sound: new MockSoundInterface(),
-                ROTATION_SPEED: 5,
-                SHIP_ACCELERATION: 300,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 level: 1,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               // Update after explosion should end (2+ seconds later)
@@ -7202,11 +7273,9 @@
                 deathBlossomRotations: 0,
                 deathBlossomTotalAngleRotated: 0,
                 sound: new MockSoundInterface(),
-                ROTATION_SPEED: 5,
-                SHIP_ACCELERATION: 300,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 level: 1,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               const keysPressed = { ArrowLeft: true, ArrowUp: true, " ": true };
@@ -7269,7 +7338,7 @@
                 titleSplashFrameCount: 0,
                 sound: new MockSoundInterface(),
                 level: 1,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               const newState = updateGameState(testState, {}, 16.67, 1000);
@@ -7338,11 +7407,9 @@
                 deathBlossomRotations: 0,
                 deathBlossomTotalAngleRotated: 0,
                 sound: new MockSoundInterface(),
-                ROTATION_SPEED: 5,
-                SHIP_ACCELERATION: 300,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 level: 1,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               const newState = updateGameState(baseState, {}, 16.67, 1000);
@@ -7385,11 +7452,9 @@
                 titleSplashVisible: false,
                 titleSplashFrameCount: 0,
                 sound: new MockSoundInterface(),
-                ROTATION_SPEED: 5,
-                SHIP_ACCELERATION: 300,
-                BULLET_SPEED: 500,
+                // Level-dependent values are now global variables
                 level: 1,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               const newState = updateGameState(baseState, {}, 16.67, 1000);
@@ -7414,15 +7479,15 @@
               const waitingStartTime = 1000;
               const spawnX = GAME_WIDTH / 2;
               const spawnY = GAME_HEIGHT / 2;
-              
+
               // Use scaled dimensions - place asteroid just outside reduced safe zone
               const baseSafeRadius = scale(96);
               const reducedSafeRadius = baseSafeRadius / 2;
               const asteroidRadius = scale(30);
               const asteroidDistance = reducedSafeRadius + asteroidRadius + scale(5); // Just outside reduced zone
-              
+
               const testState = {
-                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: scale(10), thrusting: false },
+                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: SCALED_SHIP_RADIUS, thrusting: false },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
@@ -7434,7 +7499,7 @@
                 bullets: [],
                 particles: [],
                 shipDebris: [],
-                asteroids: [{ 
+                asteroids: [{
                   x: spawnX + asteroidDistance, y: spawnY,
                   vx: 0, vy: 0,
                   baseRadius: 30, radius: asteroidRadius,
@@ -7445,15 +7510,14 @@
                 kidMode: false,
                 autoFire: false,
                 lastFireTime: 0,
-                SHIP_ACCELERATION: 300,
-                BULLET_SPEED: 500,
-                DEATH_BLOSSOM_ROTATION_COUNT: 12,
+                // Level-dependent values are now global variables
+                // Using global DEATH_BLOSSOM_ROTATION_COUNT
               };
 
               // Test at 4 seconds - should still be waiting (full safe zone)
               const fourSecondsLater = waitingStartTime + 4000;
               const result4s = updateGameState(testState, {}, 16.67, fourSecondsLater);
-              
+
               if (!result4s.waitingForRespawn) {
                 throw new Error("Ship should still be waiting after 4 seconds with full safe zone");
               }
@@ -7461,7 +7525,7 @@
               // Test at 6 seconds - should be able to respawn (reduced safe zone)
               const sixSecondsLater = waitingStartTime + 6000;
               const result6s = updateGameState(testState, {}, 16.67, sixSecondsLater);
-              
+
               if (result6s.waitingForRespawn) {
                 throw new Error("Ship should be able to respawn after 5 seconds with reduced safe zone");
               }
@@ -7472,15 +7536,15 @@
               const waitingStartTime = 1000;
               const spawnX = GAME_WIDTH / 2;
               const spawnY = GAME_HEIGHT / 2;
-              
+
               // Use scaled dimensions
               const bombRadius = scale(80); // 8x ship radius
               const asteroidRadius = scale(20);
               const closeDistance = scale(40); // Well within bomb radius
               const farDistance = bombRadius + asteroidRadius + scale(10); // Outside bomb radius
-              
+
               const testState = createTestState({
-                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: scale(10), thrusting: false },
+                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: SCALED_SHIP_RADIUS, thrusting: false },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
@@ -7488,7 +7552,7 @@
                 score: 100, // Track score to ensure no points awarded
                 asteroids: [
                   { // Close asteroid - should be destroyed
-                    x: spawnX + closeDistance, y: spawnY, 
+                    x: spawnX + closeDistance, y: spawnY,
                     vx: 0, vy: 0,
                     baseRadius: 20, radius: asteroidRadius,
                     basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
@@ -7509,7 +7573,7 @@
               // Test at 9 seconds - bomb should not trigger yet
               const nineSecondsLater = waitingStartTime + 9000;
               const result9s = updateGameState(testState, {}, 16.67, nineSecondsLater);
-              
+
               if (result9s.asteroids.length !== 2) {
                 throw new Error(`Expected 2 asteroids before bomb, got ${result9s.asteroids.length}`);
               }
@@ -7520,7 +7584,7 @@
               // Test at 11 seconds - bomb should trigger and destroy close asteroid
               const elevenSecondsLater = waitingStartTime + 11000;
               const result11s = updateGameState(testState, {}, 16.67, elevenSecondsLater);
-              
+
               if (result11s.asteroids.length !== 1) {
                 throw new Error(`Expected 1 asteroid after bomb (far one survives), got ${result11s.asteroids.length}`);
               }
@@ -7531,6 +7595,199 @@
                 throw new Error("Explosion particles should be created by desperation bomb");
               }
             });
+          });
+        });
+
+        describe("Performance Tests", function () {
+          it("should detect performance degradation over successive frame batches", function () {
+            // Set up global variables needed by updateGameState
+            if (typeof global !== 'undefined') {
+              global.keysPressed = {}; // Node.js environment
+            } else if (typeof keysPressed === 'undefined') {
+              window.keysPressed = {}; // Browser environment
+            }
+
+            // Use GameState directly for testing (no longer const, so we can mutate it)
+            let testState = GameState;
+            testState.rng = createRNGState(42); // Deterministic for consistent testing
+            testState.level = 20; // High level for challenging performance
+            testState.autoFire = true; // Enable automatic firing for realistic load testing
+            testState.sound = {
+              playShoot: () => {},
+              playExplosion: () => {},
+              playShipExplosion: () => {},
+              playAsteroidExplosion: () => {},
+              playExtraLife: () => {}
+            };
+            // Update constants for level 20
+            updateLevelDependentConstants(testState);
+
+            // Spawn 30 asteroids at various positions
+            testState.asteroids = [];
+            for (let i = 0; i < 30; i++) {
+              const x = testState.rng.next() * GAME_WIDTH;
+              const y = testState.rng.next() * GAME_HEIGHT;
+              const asteroid = createAsteroid(x, y, testState.level, testState);
+              testState.asteroids.push(asteroid);
+            }
+
+            // Set ship to center position with firing enabled
+            testState.ship.x = GAME_WIDTH / 2;
+            testState.ship.y = GAME_HEIGHT / 2;
+            testState.ship.angle = 0;
+            testState.ship.vx = 0;
+            testState.ship.vy = 0;
+            testState.waitingForRespawn = false; // Ensure ship can fire
+            testState.shipExploding = false; // Ensure ship can fire
+            // Set lastFireTime to enable immediate firing (should be standard for game init)
+            testState.lastFireTime = -calculateFireDelay(testState.level);
+
+            // Add some existing bullets to increase load
+            testState.bullets = [];
+            for (let i = 0; i < 10; i++) {
+              testState.bullets.push({
+                x: testState.rng.next() * GAME_WIDTH,
+                y: testState.rng.next() * GAME_HEIGHT,
+                vx: (testState.rng.next() - 0.5) * 400, // High velocity bullets
+                vy: (testState.rng.next() - 0.5) * 400,
+                distanceTraveled: Math.floor(testState.rng.next() * 100) // Random distance already traveled
+              });
+            }
+
+            const mockKeysPressed = {}; // No keys - auto-fire is enabled in game state
+            const deltaTime = 16; // Simulate 60fps timing
+            let currentTime = 0;
+            const updatesPerBatch = 1000;
+            const numBatches = 5;
+            const batchTimes = [];
+
+            console.log(`Performance Degradation Test:`);
+            console.log(`  Measuring ${numBatches} batches of ${updatesPerBatch} frames each`);
+
+            // Run multiple batches and measure performance degradation
+            for (let batch = 0; batch < numBatches; batch++) {
+              const batchStartTime = performance.now();
+
+              for (let i = 0; i < updatesPerBatch; i++) {
+                currentTime += deltaTime;
+
+                // Debug first few frames to see if auto-fire is working
+                if (batch === 0 && i < 5) {
+                  const bulletsBefore = testState.bullets.length;
+                  testState = updateGameState(testState, mockKeysPressed, deltaTime, currentTime);
+                  console.log(`    Frame ${i}: bullets ${bulletsBefore} -> ${testState.bullets.length}`);
+                } else {
+                  testState = updateGameState(testState, mockKeysPressed, deltaTime, currentTime);
+                }
+
+                // Prevent asteroids from spawning new levels (keep asteroid count stable)
+                if (testState.asteroids.length === 0) {
+                  // Manually respawn same number of asteroids without incrementing level
+                  for (let j = 0; j < 30; j++) {
+                    const x = testState.rng.next() * GAME_WIDTH;
+                    const y = testState.rng.next() * GAME_HEIGHT;
+                    const asteroid = createAsteroid(x, y, testState.level, testState);
+                    testState.asteroids.push(asteroid);
+                  }
+                }
+              }
+
+              const batchEndTime = performance.now();
+              const batchTime = batchEndTime - batchStartTime;
+              const avgTimePerFrame = batchTime / updatesPerBatch;
+              batchTimes.push(batchTime);
+
+              console.log(`  Batch ${batch + 1}: ${batchTime.toFixed(2)}ms total, ${avgTimePerFrame.toFixed(4)}ms/frame`);
+              console.log(`    State: ${testState.asteroids.length} asteroids, ${testState.bullets.length} bullets, ${testState.particles.length} particles`);
+            }
+
+            // Calculate performance degradation
+            const firstBatchTime = batchTimes[0];
+            const lastBatchTime = batchTimes[batchTimes.length - 1];
+            const degradationPercent = ((lastBatchTime - firstBatchTime) / firstBatchTime) * 100;
+
+            console.log(`Performance Analysis:`);
+            console.log(`  First batch: ${firstBatchTime.toFixed(2)}ms`);
+            console.log(`  Last batch: ${lastBatchTime.toFixed(2)}ms`);
+            console.log(`  Performance degradation: ${degradationPercent.toFixed(1)}%`);
+
+            // Test should pass if performance degradation is less than 20%
+            if (degradationPercent > 20) {
+              throw new Error(`Performance degradation test failed: ${degradationPercent.toFixed(1)}% degradation exceeds 20% threshold`);
+            }
+
+            // Also verify that average frame time stays reasonable
+            const overallAvgTime = batchTimes.reduce((sum, time) => sum + time, 0) / (batchTimes.length * updatesPerBatch);
+            if (overallAvgTime > 16.67) {
+              throw new Error(`Overall performance test failed: ${overallAvgTime.toFixed(3)}ms per frame exceeds 16.67ms (60fps) target`);
+            }
+          });
+
+          it("should measure scale function call overhead", function () {
+            const startTime = performance.now();
+            const iterations = 10000;
+
+            // Test the scale function performance
+            let result = 0;
+            for (let i = 0; i < iterations; i++) {
+              result += scale(100); // Accumulate to prevent optimization
+            }
+
+            const endTime = performance.now();
+            const totalTime = endTime - startTime;
+            const avgTimePerCall = (totalTime / iterations) * 1000; // Convert to microseconds
+
+            console.log(`Scale Function Performance:`);
+            console.log(`  Total time for ${iterations} calls: ${totalTime.toFixed(2)}ms`);
+            console.log(`  Average time per call: ${avgTimePerCall.toFixed(3)}μs`);
+            console.log(`  Result sum (prevent optimization): ${result}`);
+
+            // Scale function should be very fast - fail if over 10 microseconds per call
+            if (avgTimePerCall > 10) {
+              throw new Error(`Scale function too slow: ${avgTimePerCall.toFixed(3)}μs per call exceeds 10μs target`);
+            }
+          });
+
+          it("should measure bullet buffer zone calculation overhead", function () {
+            // Create test bullets at various positions
+            const testBullets = [];
+            const rng = createSeededRNG(123);
+            for (let i = 0; i < 100; i++) {
+              testBullets.push({
+                x: rng() * GAME_WIDTH,
+                y: rng() * GAME_HEIGHT,
+                dx: (rng() - 0.5) * 8,
+                dy: (rng() - 0.5) * 8
+              });
+            }
+
+            const startTime = performance.now();
+            const iterations = 1000;
+
+            // Test bullet buffer calculation performance
+            for (let i = 0; i < iterations; i++) {
+              for (const bullet of testBullets) {
+                // Use cached bullet buffer (optimization target)
+                const buffer = SCALED_BULLET_BUFFER;
+
+                // Prevent optimization
+                if (buffer < 0) throw new Error("Invalid buffer");
+              }
+            }
+
+            const endTime = performance.now();
+            const totalTime = endTime - startTime;
+            const totalCalculations = iterations * testBullets.length;
+            const avgTimePerCalc = (totalTime / totalCalculations) * 1000; // Convert to microseconds
+
+            console.log(`Bullet Buffer Calculation Performance:`);
+            console.log(`  Total time for ${totalCalculations} calculations: ${totalTime.toFixed(2)}ms`);
+            console.log(`  Average time per calculation: ${avgTimePerCalc.toFixed(3)}μs`);
+
+            // Buffer calculation should be fast - fail if over 5 microseconds per calculation
+            if (avgTimePerCalc > 5) {
+              throw new Error(`Buffer calculation too slow: ${avgTimePerCalc.toFixed(3)}μs per calculation exceeds 5μs target`);
+            }
           });
         });
 

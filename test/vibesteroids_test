@@ -35,12 +35,15 @@ global.Image = dom.window.Image;
 global.Audio = dom.window.Audio || function() { return { play: () => {}, pause: () => {} }; };
 global.AudioContext = dom.window.AudioContext || function() { return { createOscillator: () => ({ connect: () => {}, start: () => {}, stop: () => {} }), createGain: () => ({ connect: () => {}, gain: { value: 0 } }), destination: {} }; };
 
-// Add requestAnimationFrame for Node.js compatibility
+// Add global variables needed by the game code
+global.keysPressed = {};
+
+// Add requestAnimationFrame for Node.js compatibility - immediate execution for testing
 global.requestAnimationFrame = global.requestAnimationFrame || function(callback) {
-    return setTimeout(callback, 16); // ~60fps
+    return setImmediate(callback); // Execute immediately in next tick
 };
 global.cancelAnimationFrame = global.cancelAnimationFrame || function(id) {
-    clearTimeout(id);
+    clearImmediate(id);
 };
 
 // Mock Canvas context for testing (we don't need actual rendering)
@@ -119,20 +122,26 @@ const jsCode = htmlContent.substring(beginIndex, endIndex + endMarker.length);
 // Set up global Math object for Node.js compatibility
 global.Math = Math;
 
-// Check for seed parameter from command line
+// Check for command line parameters
 const args = process.argv.slice(2);
 let testSeed = null;
+let testSuites = "unit,perf"; // Default to both
+
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--seed' && i + 1 < args.length) {
         testSeed = parseInt(args[i + 1]);
-        break;
+    } else if (args[i] === '--test' && i + 1 < args.length) {
+        testSuites = args[i + 1];
+    } else if (args[i].startsWith('--test=')) {
+        testSuites = args[i].substring(7);
     }
 }
 
-// Set seed in global scope for the game code to use
+// Set globals for the game code to use
 if (testSeed !== null) {
     global.TEST_SEED = testSeed;
 }
+global.TEST_SUITES = testSuites;
 
 // Override requestAnimationFrame to prevent game loop from running
 global.requestAnimationFrame = function(callback) {

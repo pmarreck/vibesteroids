@@ -65,7 +65,7 @@ function updateShipPosition(ship, deltaTime) {
 
 ### **Test Quality Standards**
 - **No Logic in Tests**: Tests should only setup → call → assert
-- **Pure Function Testing**: Tests call functions with inputs, assert on outputs
+- **Pure Function Testing**: Tests call functions with scalar inputs, assert on scalar outputs; avoid duplicating business logic in tests
 - **Comprehensive Coverage**: All features must have thorough test coverage
 
 ```javascript
@@ -73,10 +73,10 @@ function updateShipPosition(ship, deltaTime) {
 it('should award extra life at 20,000 points', function() {
     // Setup state
     const testState = { score: 19950, lives: 3, nextExtraLifeScore: 20000 };
-    
+
     // Call function
     const result = updateGameState(testState, {}, 0.016, 1000);
-    
+
     // Assert on results
     if (result.lives !== 4) {
         throw new Error(`Expected 4 lives, got ${result.lives}`);
@@ -113,7 +113,7 @@ node test/asteroids_test
 ### **Test Categories**
 - Utility Functions (distance, collision detection)
 - Game State Updates (movement, input handling)
-- Collision Detection (bullet-asteroid, ship-asteroid)  
+- Collision Detection (bullet-asteroid, ship-asteroid)
 - Sound System (all game audio events)
 - Death Blossom Feature (complete test suite)
 - Extra Life System (bullet-collision triggered rewards)
@@ -151,25 +151,25 @@ const GameState = {
     asteroids: [{ x, y, vx, vy, radius, angle, points }],
     bullets: [{ x, y, vx, vy, distanceTraveled }],
     particles: [{ x, y, vx, vy, life, maxLife }],
-    
+
     // Game state
     score: 0,
     lives: 3,
     level: 1,
     gameOver: false,
     paused: false,
-    
+
     // Extra life system
     nextExtraLifeScore: 20000,
     EXTRA_LIFE_INTERVAL: 20000,
-    
+
     // Death Blossom state
     deathBlossomActive: false,
     deathBlossomStartTime: 0,
     deathBlossomRotations: 0,
     deathBlossomAvailable: true,
     DEATH_BLOSSOM_ROTATION_COUNT: 9,
-    
+
     // Configuration
     SHIP_ACCELERATION: 300,
     ROTATION_SPEED: 5,
@@ -214,7 +214,7 @@ function drawNeonText(ctx, text, x, y, color) {
     ctx.shadowBlur = scale(20);
     ctx.strokeStyle = color;
     ctx.strokeText(text, x, y);
-    
+
     // Inner core (bright, solid)
     ctx.shadowBlur = scale(5);
     ctx.fillStyle = '#ffffff';
