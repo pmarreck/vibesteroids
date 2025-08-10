@@ -2668,7 +2668,7 @@
          * This tradeoff prioritizes user experience (smooth gameplay) over
          * theoretical purity, which is appropriate for a real-time game.
          */
-        let newState = {
+        let currentState = {
           ...state, // Copy all properties from current state
           ship: { ...deathBlossomUpdatedState.ship },
           escapeKeyWasPressed: keysPressed["Escape"] || false,
@@ -2684,102 +2684,109 @@
 
         // Check if ship explosion should end
         if (
-          newState.shipExploding &&
-          currentTime - newState.shipExplosionStartTime > 2000
+          currentState.shipExploding &&
+          currentTime - currentState.shipExplosionStartTime > 2000
         ) {
           // End explosion
-          newState.shipExploding = false;
-          newState.shipDebris = [];
+          currentState.shipExploding = false;
+          currentState.shipDebris = [];
 
           // Check if game should end (no lives left)
-          if (newState.lives <= 0) {
-            newState.gameOver = true;
+          if (currentState.lives <= 0) {
+            currentState.gameOver = true;
             if (typeof document !== "undefined") {
               let finalScoreElement = document.getElementById("finalScore");
               let gameOverScreen = document.getElementById("gameOverScreen");
               if (finalScoreElement)
-                finalScoreElement.textContent = newState.score;
+                finalScoreElement.textContent = currentState.score;
               if (gameOverScreen) gameOverScreen.style.display = "block";
             }
           } else {
             // Enter waiting for respawn state instead of immediate respawn
-            newState.waitingForRespawn = true;
-            newState.waitingForRespawnStartTime = currentTime;
+            currentState.waitingForRespawn = true;
+            currentState.waitingForRespawnStartTime = currentTime;
           }
         }
 
         // Update ship based on input (only if not exploding; allow steering during waitingForRespawn)
-        if (!newState.shipExploding) {
+        if (!currentState.shipExploding) {
           // Handle rotation - Death Blossom overrides manual controls
-          if (!newState.deathBlossomActive) {
+          if (!currentState.deathBlossomActive) {
             // Normal rotation controls (keyboard only - mobile sets angle directly)
             if (keysPressed["ArrowLeft"]) {
-              newState.ship.angle -= CURRENT_ROTATION_SPEED * deltaTime;
+              currentState.ship.angle -= CURRENT_ROTATION_SPEED * deltaTime;
             }
 
             if (keysPressed["ArrowRight"]) {
-              newState.ship.angle += CURRENT_ROTATION_SPEED * deltaTime;
+              currentState.ship.angle += CURRENT_ROTATION_SPEED * deltaTime;
             }
           }
           // If Death Blossom is active, ship.angle is already set by updateDeathBlossomState
 
           // Handle thrust - Death Blossom overrides manual controls, no thrust during waitingForRespawn
-          if (!newState.deathBlossomActive && !newState.waitingForRespawn) {
+          if (
+            !currentState.deathBlossomActive &&
+            !currentState.waitingForRespawn
+          ) {
             // Normal thrust controls (keyboard or mobile)
             if (keysPressed["ArrowUp"] || isThrusting) {
-              newState.ship.thrusting = true;
+              currentState.ship.thrusting = true;
 
               // Apply thrust in direction ship is pointing
               let acceleration = CURRENT_SHIP_ACCELERATION * deltaTime;
-              newState.ship.vx += Math.cos(newState.ship.angle) * acceleration;
-              newState.ship.vy += Math.sin(newState.ship.angle) * acceleration;
+              currentState.ship.vx +=
+                Math.cos(currentState.ship.angle) * acceleration;
+              currentState.ship.vy +=
+                Math.sin(currentState.ship.angle) * acceleration;
 
               // Play thrust sound occasionally to avoid spam
               if (mathObj.random() < 0.1) {
-                newState.sound.playThrust();
+                currentState.sound.playThrust();
               }
             } else {
-              newState.ship.thrusting = false;
+              currentState.ship.thrusting = false;
             }
           } else {
             // During Death Blossom or waitingForRespawn, no manual thrust control
-            newState.ship.thrusting = false;
+            currentState.ship.thrusting = false;
           }
 
           // Update ship position and velocity (only when not waiting for respawn)
-          if (!newState.waitingForRespawn) {
-            newState.ship.x += newState.ship.vx * SCALE_FACTOR * deltaTime;
-            newState.ship.y += newState.ship.vy * SCALE_FACTOR * deltaTime;
+          if (!currentState.waitingForRespawn) {
+            currentState.ship.x +=
+              currentState.ship.vx * SCALE_FACTOR * deltaTime;
+            currentState.ship.y +=
+              currentState.ship.vy * SCALE_FACTOR * deltaTime;
 
             // Apply drag to gradually slow the ship down
             let dragFactor = 0.99; // Ship retains 99% of velocity per frame (gentle drag)
-            newState.ship.vx *= dragFactor;
-            newState.ship.vy *= dragFactor;
+            currentState.ship.vx *= dragFactor;
+            currentState.ship.vy *= dragFactor;
 
             // Screen wrapping
-            if (newState.ship.x < 0) newState.ship.x = GAME_WIDTH;
-            else if (newState.ship.x > GAME_WIDTH) newState.ship.x = 0;
+            if (currentState.ship.x < 0) currentState.ship.x = GAME_WIDTH;
+            else if (currentState.ship.x > GAME_WIDTH) currentState.ship.x = 0;
 
-            if (newState.ship.y < 0) newState.ship.y = GAME_HEIGHT;
-            else if (newState.ship.y > GAME_HEIGHT) newState.ship.y = 0;
+            if (currentState.ship.y < 0) currentState.ship.y = GAME_HEIGHT;
+            else if (currentState.ship.y > GAME_HEIGHT) currentState.ship.y = 0;
           } else {
             // Override position and velocity for waiting state (in case input processing modified them)
-            newState.ship.x = GAME_WIDTH / 2;
-            newState.ship.y = GAME_HEIGHT / 2;
-            newState.ship.vx = 0;
-            newState.ship.vy = 0;
+            currentState.ship.x = GAME_WIDTH / 2;
+            currentState.ship.y = GAME_HEIGHT / 2;
+            currentState.ship.vx = 0;
+            currentState.ship.vy = 0;
           }
 
           // Fire bullets (with rate limiting)
           let shouldFire;
 
-          if (newState.deathBlossomActive) {
+          if (currentState.deathBlossomActive) {
             // Death Blossom mode: auto-fire at 10x rate, ignore manual controls
-            shouldFire = shouldDeathBlossomFire(newState, currentTime);
-          } else if (!newState.waitingForRespawn) {
+            shouldFire = shouldDeathBlossomFire(currentState, currentTime);
+          } else if (!currentState.waitingForRespawn) {
             // Normal firing logic with level-based fire rate scaling
             // Scale from 250ms (level 1) to 125ms (level 20+) for double fire rate
-            let level = newState.level || 1;
+            let level = currentState.level || 1;
 
             let fireDelay;
             if (level >= 20) {
@@ -2796,7 +2803,7 @@
               (keysPressed[" "] ||
                 (state.autoFire && !isMobileRotaryFiring) ||
                 isMobileRotaryFiring) &&
-              currentTime - newState.lastFireTime > fireDelay;
+              currentTime - currentState.lastFireTime > fireDelay;
           } else {
             // No firing during waitingForRespawn
             shouldFire = false;
@@ -2804,40 +2811,44 @@
 
           if (shouldFire) {
             // Use base bullet speed during Death Blossom for consistent firing pattern
-            let bulletSpeed = newState.deathBlossomActive
+            let bulletSpeed = currentState.deathBlossomActive
               ? CURRENT_DEATH_BLOSSOM_BULLET_SPEED
               : CURRENT_BULLET_SPEED;
 
             // Temporarily override BULLET_SPEED for Death Blossom
-            let originalBulletSpeed = newState.BULLET_SPEED;
-            newState.BULLET_SPEED = bulletSpeed;
+            let originalBulletSpeed = currentState.BULLET_SPEED;
+            currentState.BULLET_SPEED = bulletSpeed;
 
             // Use functional interface for bullet firing
-            newState = fireBullet(newState, currentTime);
+            let stateAfterFiring = fireBullet(currentState, currentTime);
 
             // Restore original bullet speed
-            newState.BULLET_SPEED = originalBulletSpeed;
+            stateAfterFiring.BULLET_SPEED = originalBulletSpeed;
+            currentState = stateAfterFiring;
           }
         }
 
         // Update bullets
-        newState = updateBullets(newState, deltaTime);
+        let stateAfterBullets = updateBullets(currentState, deltaTime);
 
         // Update particles
-        newState = updateParticles(newState, deltaTime);
+        let stateAfterParticles = updateParticles(stateAfterBullets, deltaTime);
 
         // Update ship debris
-        newState = updateShipDebris(newState, deltaTime);
+        let stateAfterDebris = updateShipDebris(stateAfterParticles, deltaTime);
 
         // Update asteroids
-        newState = updateAsteroids(newState, deltaTime);
+        let stateAfterAsteroids = updateAsteroids(stateAfterDebris, deltaTime);
+
+        // Apply all updates
+        currentState = stateAfterAsteroids;
 
         // Check bullet-asteroid collisions
-        for (let i = newState.bullets.length - 1; i >= 0; i--) {
-          let bullet = newState.bullets[i];
+        for (let i = currentState.bullets.length - 1; i >= 0; i--) {
+          let bullet = currentState.bullets[i];
 
-          for (let j = newState.asteroids.length - 1; j >= 0; j--) {
-            let asteroid = newState.asteroids[j];
+          for (let j = currentState.asteroids.length - 1; j >= 0; j--) {
+            let asteroid = currentState.asteroids[j];
 
             if (distance(bullet, asteroid) < asteroid.radius + 5) {
               // Apply bullet momentum to asteroid (inversely proportional to size)
@@ -2849,11 +2860,11 @@
               // Create modified asteroid with bullet momentum applied
               let newVx = limitVelocityByLevel(
                 asteroid.vx + bullet.vx * transferAmount,
-                newState.level,
+                currentState.level,
               );
               let newVy = limitVelocityByLevel(
                 asteroid.vy + bullet.vy * transferAmount,
-                newState.level,
+                currentState.level,
               );
 
               let asteroidWithMomentum = {
@@ -2864,41 +2875,42 @@
 
               // Handle asteroid collision (explosion, splitting, etc.)
               let collisionData = handleAsteroidCollision(
-                newState,
+                currentState,
                 asteroidWithMomentum,
               );
               let collisionResult = collisionData.collisionResult;
-              newState = collisionData.updatedState;
-              newState.sound.playAsteroidExplosion();
+              let stateAfterCollision = collisionData.updatedState;
+              stateAfterCollision.sound.playAsteroidExplosion();
+              currentState = stateAfterCollision;
 
               // Remove bullet
-              newState.bullets.splice(i, 1);
+              currentState.bullets.splice(i, 1);
 
               // Add any new asteroids from splitting
-              newState.asteroids.push(...collisionResult.newAsteroids);
+              currentState.asteroids.push(...collisionResult.newAsteroids);
 
               // Remove the original asteroid
               if (collisionResult.shouldRemove) {
-                newState.asteroids.splice(j, 1);
+                currentState.asteroids.splice(j, 1);
               }
 
               // Update score (only if not in kid mode)
-              if (!newState.kidMode) {
-                let oldScore = newState.score;
+              if (!currentState.kidMode) {
+                let oldScore = currentState.score;
                 // Different points for different asteroid sizes
                 let points =
                   asteroid.baseRadius > ASTEROID_SPLIT_THRESHOLD ? 80 : 120; // Large asteroids (that split) = 80, small asteroids (that don't split) = 120
-                newState.score += points;
+                currentState.score += points;
 
                 // Check for extra life award
-                let extraLifeState = checkExtraLife(newState, oldScore);
-                if (extraLifeState.lives > newState.lives) {
+                let extraLifeState = checkExtraLife(currentState, oldScore);
+                if (extraLifeState.lives > currentState.lives) {
                   // Extra life was awarded
-                  newState.lives = extraLifeState.lives;
-                  newState.nextExtraLifeScore =
+                  currentState.lives = extraLifeState.lives;
+                  currentState.nextExtraLifeScore =
                     extraLifeState.nextExtraLifeScore;
-                  if (newState.sound && newState.sound.extraLife) {
-                    newState.sound.extraLife();
+                  if (currentState.sound && currentState.sound.extraLife) {
+                    currentState.sound.extraLife();
                   }
                 }
               }
@@ -2909,54 +2921,59 @@
         }
 
         // Check ship-asteroid collisions (only if ship is not already exploding and not waiting for respawn)
-        if (!newState.shipExploding && !newState.waitingForRespawn) {
-          for (let i = newState.asteroids.length - 1; i >= 0; i--) {
-            let asteroid = newState.asteroids[i];
+        if (!currentState.shipExploding && !currentState.waitingForRespawn) {
+          for (let i = currentState.asteroids.length - 1; i >= 0; i--) {
+            let asteroid = currentState.asteroids[i];
             if (
-              distance(newState.ship, asteroid) <
-              newState.ship.radius + asteroid.radius
+              distance(currentState.ship, asteroid) <
+              currentState.ship.radius + asteroid.radius
             ) {
               // Start ship explosion
-              newState.shipExploding = true;
-              newState.shipExplosionStartTime = currentTime;
+              currentState.shipExploding = true;
+              currentState.shipExplosionStartTime = currentTime;
 
               // Create ship debris and explosion particles
-              newState = createShipDebris(
-                newState,
-                newState.ship.x,
-                newState.ship.y,
-                newState.ship.vx,
-                newState.ship.vy,
+              let stateWithDebris = createShipDebris(
+                currentState,
+                currentState.ship.x,
+                currentState.ship.y,
+                currentState.ship.vx,
+                currentState.ship.vy,
               );
+              currentState = stateWithDebris;
 
               // Handle asteroid collision (explosion, splitting, etc.)
-              let collisionData = handleAsteroidCollision(newState, asteroid);
+              let collisionData = handleAsteroidCollision(
+                currentState,
+                asteroid,
+              );
               let collisionResult = collisionData.collisionResult;
-              newState = collisionData.updatedState;
+              let stateAfterAsteroidHit = collisionData.updatedState;
+              currentState = stateAfterAsteroidHit;
 
               // Play BOTH explosion sounds together
-              newState.sound.playShipExplosion();
-              newState.sound.playAsteroidExplosion();
+              currentState.sound.playShipExplosion();
+              currentState.sound.playAsteroidExplosion();
 
               // Add any new asteroids from splitting
-              newState.asteroids.push(...collisionResult.newAsteroids);
+              currentState.asteroids.push(...collisionResult.newAsteroids);
 
               // Remove the asteroid that was hit
               if (collisionResult.shouldRemove) {
-                newState.asteroids.splice(i, 1);
+                currentState.asteroids.splice(i, 1);
               }
 
               // Lose a life (only if not in kid mode)
-              if (!newState.kidMode) {
-                newState.lives--;
+              if (!currentState.kidMode) {
+                currentState.lives--;
               }
 
               // Stop Death Blossom if it was active (ship death ends Death Blossom)
-              if (newState.deathBlossomActive) {
-                newState.deathBlossomActive = false;
-                newState.deathBlossomStartTime = 0;
-                newState.deathBlossomRotations = 0;
-                newState.deathBlossomTotalAngleRotated = 0;
+              if (currentState.deathBlossomActive) {
+                currentState.deathBlossomActive = false;
+                currentState.deathBlossomStartTime = 0;
+                currentState.deathBlossomRotations = 0;
+                currentState.deathBlossomTotalAngleRotated = 0;
               }
 
               // Don't end game immediately if lives reach 0 - wait for explosion to complete
@@ -2968,41 +2985,47 @@
         }
 
         // Spawn new asteroids if needed (progressive difficulty)
-        if (newState.asteroids.length === 0 && !newState.gameOver) {
+        if (currentState.asteroids.length === 0 && !currentState.gameOver) {
           // Increase level and spawn more asteroids each wave
-          newState.level++;
+          currentState.level++;
           // Update cached level-dependent constants
-          updateLevelDependentConstants(newState);
-          let asteroidsToSpawn = ASTEROID_SPAWN_COUNT + (newState.level - 1);
-          newState = spawnAsteroids(newState, asteroidsToSpawn);
+          updateLevelDependentConstants(currentState);
+          let asteroidsToSpawn =
+            ASTEROID_SPAWN_COUNT + (currentState.level - 1);
+          let stateWithNewAsteroids = spawnAsteroids(
+            currentState,
+            asteroidsToSpawn,
+          );
+          currentState = stateWithNewAsteroids;
         }
 
         // Title splash management using frame-based system
-        if (newState.frameTitleFirstShownAt !== null) {
+        if (currentState.frameTitleFirstShownAt !== null) {
           let framesSinceStart =
-            newState.frameNumber - newState.frameTitleFirstShownAt;
+            currentState.frameNumber - currentState.frameTitleFirstShownAt;
           let totalTitleFrames = 60 + 120 + 60; // fade in + steady + fade out = 240 frames
 
           if (framesSinceStart >= totalTitleFrames) {
             // Title splash has expired, hide it
-            newState.frameTitleFirstShownAt = null;
-            newState.titleSplashVisible = false;
+            currentState.frameTitleFirstShownAt = null;
+            currentState.titleSplashVisible = false;
           } else {
             // Title splash is still active
-            newState.titleSplashVisible = true;
+            currentState.titleSplashVisible = true;
           }
         } else {
           // No title splash showing
-          newState.titleSplashVisible = false;
+          currentState.titleSplashVisible = false;
         }
 
         // Check for safe respawn if waiting - do this at the very end to override any velocity changes
-        if (newState.waitingForRespawn) {
+        if (currentState.waitingForRespawn) {
           let spawnX = GAME_WIDTH / 2;
           let spawnY = GAME_HEIGHT / 2;
 
           // Calculate safe radius - reduce by half after 5 seconds of waiting
-          let waitingTime = currentTime - newState.waitingForRespawnStartTime;
+          let waitingTime =
+            currentTime - currentState.waitingForRespawnStartTime;
           let baseSafeRadius = SCALED_SAFE_RADIUS; // Safe radius around spawn point (20% larger, about 4.8x ship radius)
           let safeRadius =
             waitingTime > 5000 ? baseSafeRadius / 2 : baseSafeRadius;
@@ -3013,47 +3036,57 @@
             let spawnPoint = { x: spawnX, y: spawnY };
 
             // Find and destroy asteroids within bomb radius
-            for (let i = newState.asteroids.length - 1; i >= 0; i--) {
-              let asteroid = newState.asteroids[i];
+            for (let i = currentState.asteroids.length - 1; i >= 0; i--) {
+              let asteroid = currentState.asteroids[i];
               if (
                 distance(spawnPoint, asteroid) <
                 bombRadius + asteroid.radius
               ) {
                 // Create explosion effect at asteroid location
-                newState = createExplosion(newState, asteroid.x, asteroid.y);
+                let stateWithExplosion = createExplosion(
+                  currentState,
+                  asteroid.x,
+                  asteroid.y,
+                );
+                currentState = stateWithExplosion;
                 // Remove asteroid (no points awarded)
-                newState.asteroids.splice(i, 1);
+                currentState.asteroids.splice(i, 1);
               }
             }
 
             // Play explosion sound for the bomb
-            newState.sound.playAsteroidExplosion();
+            currentState.sound.playAsteroidExplosion();
 
             // Create additional explosion effect at spawn center
-            newState = createExplosion(newState, spawnX, spawnY);
+            let stateWithCenterExplosion = createExplosion(
+              currentState,
+              spawnX,
+              spawnY,
+            );
+            currentState = stateWithCenterExplosion;
           }
 
           // Keep ship stationary at spawn point during waiting
-          newState.ship.x = spawnX;
-          newState.ship.y = spawnY;
-          newState.ship.vx = 0;
-          newState.ship.vy = 0;
+          currentState.ship.x = spawnX;
+          currentState.ship.y = spawnY;
+          currentState.ship.vx = 0;
+          currentState.ship.vy = 0;
 
-          if (isSpawnAreaClear(newState, safeRadius)) {
+          if (isSpawnAreaClear(currentState, safeRadius)) {
             // Safe to respawn - ship is already positioned and retains its current angle
-            newState.waitingForRespawn = false;
-            newState.waitingForRespawnStartTime = 0;
+            currentState.waitingForRespawn = false;
+            currentState.waitingForRespawnStartTime = 0;
 
             // Reset Death Blossom availability for new ship life
-            newState.deathBlossomAvailable = true;
+            currentState.deathBlossomAvailable = true;
 
             // Trigger neon title splash on ship respawn using frame-based system
-            newState.frameTitleFirstShownAt = newState.frameNumber;
+            currentState.frameTitleFirstShownAt = currentState.frameNumber;
           }
           // If not safe, continue waiting (game state will keep updating)
         }
 
-        return newState;
+        return currentState;
       }
 
       function createExplosion(state, x, y) {
