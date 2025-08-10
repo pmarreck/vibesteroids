@@ -3575,15 +3575,13 @@
         let deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
 
-        let newState = updateGameState(
+        GameState = updateGameState(
           GameState,
           keysPressed,
           deltaTime,
           currentTime,
         );
 
-        // Replace global state mutation with simple variable reassignment
-        GameState = newState;
         render(GameState);
 
         requestAnimationFrame(gameLoop);
