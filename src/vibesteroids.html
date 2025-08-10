@@ -2464,57 +2464,90 @@
 
       // Update particles - takes state and returns updated state
       function updateParticles(state, deltaTime) {
-        state.particles = state.particles.filter((particle) => {
-          particle.x += particle.vx * SCALE_FACTOR * deltaTime;
-          particle.y += particle.vy * SCALE_FACTOR * deltaTime;
+        let updatedParticles = state.particles
+          .map((particle) => {
+            return {
+              ...particle,
+              x: particle.x + particle.vx * SCALE_FACTOR * deltaTime,
+              y: particle.y + particle.vy * SCALE_FACTOR * deltaTime,
+              vx: particle.vx * 0.98,
+              vy: particle.vy * 0.98,
+              life: particle.life - 1,
+            };
+          })
+          .filter((particle) => particle.life > 0);
 
-          // Apply gravity to particles
-          particle.vx *= 0.98;
-          particle.vy *= 0.98;
-
-          return --particle.life > 0;
-        });
-        return state;
+        return {
+          ...state,
+          particles: updatedParticles,
+        };
       }
 
       // Update ship debris - takes state and returns updated state
       function updateShipDebris(state, deltaTime) {
-        state.shipDebris = state.shipDebris.filter((debris) => {
-          debris.x += debris.vx * SCALE_FACTOR * deltaTime;
-          debris.y += debris.vy * SCALE_FACTOR * deltaTime;
-          debris.angle += debris.angularVelocity * deltaTime;
+        let updatedDebris = state.shipDebris
+          .map((debris) => {
+            let newX = debris.x + debris.vx * SCALE_FACTOR * deltaTime;
+            let newY = debris.y + debris.vy * SCALE_FACTOR * deltaTime;
+            let newAngle = debris.angle + debris.angularVelocity * deltaTime;
 
-          // Apply drag
-          debris.vx *= 0.99;
-          debris.vy *= 0.99;
-          debris.angularVelocity *= 0.98;
+            // Apply drag
+            let newVx = debris.vx * 0.99;
+            let newVy = debris.vy * 0.99;
+            let newAngularVelocity = debris.angularVelocity * 0.98;
 
-          // Screen wrapping for debris
-          if (debris.x < -50) debris.x = GAME_WIDTH + 50;
-          else if (debris.x > GAME_WIDTH + 50) debris.x = -50;
-          if (debris.y < -50) debris.y = GAME_HEIGHT + 50;
-          else if (debris.y > GAME_HEIGHT + 50) debris.y = -50;
+            // Screen wrapping for debris
+            if (newX < -50) newX = GAME_WIDTH + 50;
+            else if (newX > GAME_WIDTH + 50) newX = -50;
+            if (newY < -50) newY = GAME_HEIGHT + 50;
+            else if (newY > GAME_HEIGHT + 50) newY = -50;
 
-          return --debris.life > 0;
-        });
-        return state;
+            return {
+              ...debris,
+              x: newX,
+              y: newY,
+              angle: newAngle,
+              vx: newVx,
+              vy: newVy,
+              angularVelocity: newAngularVelocity,
+              life: debris.life - 1,
+            };
+          })
+          .filter((debris) => debris.life > 0);
+
+        return {
+          ...state,
+          shipDebris: updatedDebris,
+        };
       }
 
       // Update asteroids - takes state and returns updated state
       function updateAsteroids(state, deltaTime) {
-        state.asteroids.forEach((asteroid) => {
-          asteroid.x += asteroid.vx * SCALE_FACTOR * deltaTime;
-          asteroid.y += asteroid.vy * SCALE_FACTOR * deltaTime;
-          asteroid.angle += asteroid.angularVelocity * deltaTime;
+        // Create new array with updated asteroid objects to avoid mutations
+        let updatedAsteroids = state.asteroids.map((asteroid) => {
+          let newX = asteroid.x + asteroid.vx * SCALE_FACTOR * deltaTime;
+          let newY = asteroid.y + asteroid.vy * SCALE_FACTOR * deltaTime;
+          let newAngle = asteroid.angle + asteroid.angularVelocity * deltaTime;
 
           // Screen wrapping
-          if (asteroid.x < -50) asteroid.x = GAME_WIDTH + 50;
-          else if (asteroid.x > GAME_WIDTH + 50) asteroid.x = -50;
+          if (newX < -50) newX = GAME_WIDTH + 50;
+          else if (newX > GAME_WIDTH + 50) newX = -50;
 
-          if (asteroid.y < -50) asteroid.y = GAME_HEIGHT + 50;
-          else if (asteroid.y > GAME_HEIGHT + 50) asteroid.y = -50;
+          if (newY < -50) newY = GAME_HEIGHT + 50;
+          else if (newY > GAME_HEIGHT + 50) newY = -50;
+
+          return {
+            ...asteroid,
+            x: newX,
+            y: newY,
+            angle: newAngle,
+          };
         });
-        return state;
+
+        return {
+          ...state,
+          asteroids: updatedAsteroids,
+        };
       }
 
       // Update bullets - takes state and returns updated state
@@ -2523,33 +2556,46 @@
         let maxAsteroidRadius = SCALED_MAX_ASTEROID_RADIUS; // Largest possible asteroid radius
         let bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
 
-        state.bullets = state.bullets.filter((bullet) => {
-          let oldX = bullet.x;
-          let oldY = bullet.y;
+        let updatedBullets = state.bullets
+          .map((bullet) => {
+            let oldX = bullet.x;
+            let oldY = bullet.y;
 
-          bullet.x += bullet.vx * SCALE_FACTOR * deltaTime;
-          bullet.y += bullet.vy * SCALE_FACTOR * deltaTime;
+            let newX = bullet.x + bullet.vx * SCALE_FACTOR * deltaTime;
+            let newY = bullet.y + bullet.vy * SCALE_FACTOR * deltaTime;
 
-          // Track distance traveled
-          let dx = bullet.x - oldX;
-          let dy = bullet.y - oldY;
-          bullet.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
+            // Track distance traveled
+            let dx = newX - oldX;
+            let dy = newY - oldY;
+            let newDistanceTraveled =
+              bullet.distanceTraveled + Math.sqrt(dx * dx + dy * dy);
 
-          // Screen wrapping for bullets
-          if (bullet.x < -bulletBuffer) bullet.x = GAME_WIDTH + bulletBuffer;
-          else if (bullet.x > GAME_WIDTH + bulletBuffer)
-            bullet.x = -bulletBuffer;
+            // Screen wrapping for bullets
+            if (newX < -bulletBuffer) newX = GAME_WIDTH + bulletBuffer;
+            else if (newX > GAME_WIDTH + bulletBuffer) newX = -bulletBuffer;
 
-          if (bullet.y < -bulletBuffer) bullet.y = GAME_HEIGHT + bulletBuffer;
-          else if (bullet.y > GAME_HEIGHT + bulletBuffer)
-            bullet.y = -bulletBuffer;
+            if (newY < -bulletBuffer) newY = GAME_HEIGHT + bulletBuffer;
+            else if (newY > GAME_HEIGHT + bulletBuffer) newY = -bulletBuffer;
 
-          // Remove bullet if it has traveled more than half a screen diagonal
-          let maxDistance =
-            Math.sqrt(GAME_WIDTH * GAME_WIDTH + GAME_HEIGHT * GAME_HEIGHT) / 2;
-          return bullet.distanceTraveled < maxDistance;
-        });
-        return state;
+            return {
+              ...bullet,
+              x: newX,
+              y: newY,
+              distanceTraveled: newDistanceTraveled,
+            };
+          })
+          .filter((bullet) => {
+            // Remove bullet if it has traveled more than half a screen diagonal
+            let maxDistance =
+              Math.sqrt(GAME_WIDTH * GAME_WIDTH + GAME_HEIGHT * GAME_HEIGHT) /
+              2;
+            return bullet.distanceTraveled < maxDistance;
+          });
+
+        return {
+          ...state,
+          bullets: updatedBullets,
+        };
       }
 
       // Game state update function
@@ -3206,6 +3252,19 @@
         );
 
         for (let i = 0; i < count; i++) {
+          // If no valid regions (shouldn't happen but safety check), use random position far from center
+          if (validRegions.length === 0) {
+            let angle = state.rng.next() * Math.PI * 2;
+            let distance = SCALED_SAFE_RADIUS * 2;
+            let x = GAME_WIDTH / 2 + Math.cos(angle) * distance;
+            let y = GAME_HEIGHT / 2 + Math.sin(angle) * distance;
+
+            let asteroidData = createAsteroid(state, x, y, state.level);
+            state = asteroidData.state;
+            newAsteroids.push(asteroidData.asteroid);
+            continue;
+          }
+
           // Pick a random valid region
           let regionIndex = Math.floor(state.rng.next() * validRegions.length);
           let region = validRegions[regionIndex];
