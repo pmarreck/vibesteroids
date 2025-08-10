@@ -173,8 +173,8 @@
         border-radius: 8px;
         z-index: 10000;
         cursor: pointer;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         display: none;
       }
 
@@ -185,13 +185,13 @@
         transform: translate(-50%, -50%);
         padding: 15px 25px;
         font-size: 16px;
-        background-color: #4CAF50;
+        background-color: #4caf50;
         color: white;
         border: none;
         border-radius: 8px;
         z-index: 10001;
         cursor: pointer;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         display: none;
       }
 
@@ -200,7 +200,7 @@
         .game-info {
           top: 15px; /* Move down 5px from original 10px */
         }
-        
+
         .death-blossom-indicator {
           top: 15px; /* Move down 5px from original 10px */
         }
@@ -236,17 +236,11 @@
       🔆
     </div>
 
-    <button
-      id="deathBlossomButton"
-      class="death-blossom-button"
-    >
+    <button id="deathBlossomButton" class="death-blossom-button">
       💥 DEATH BLOSSOM
     </button>
 
-    <button
-      id="shakePromptButton"
-      class="shake-prompt-button"
-    >
+    <button id="shakePromptButton" class="shake-prompt-button">
       📱 Enable Shake Detection
     </button>
 
@@ -337,9 +331,11 @@
 
       // Parse test suites (default to both unit and perf)
       let testSuites = isNodeJS
-        ? (typeof global !== 'undefined' && global.TEST_SUITES ? global.TEST_SUITES : "unit,perf")
-        : (urlParams.get("test") || "unit,perf");
-      let enabledSuites = testSuites.split(",").map(s => s.trim());
+        ? typeof global !== "undefined" && global.TEST_SUITES
+          ? global.TEST_SUITES
+          : "unit,perf"
+        : urlParams.get("test") || "unit,perf";
+      let enabledSuites = testSuites.split(",").map((s) => s.trim());
 
       // Check for level parameter to initialize game at specific level
       let levelParam = urlParams.get("level");
@@ -374,7 +370,7 @@
         t ^= t + Math.imul(t ^ (t >>> 7), t | 61); // More mixing
         return {
           newState: state,
-          value: ((t ^ (t >>> 14)) >>> 0) / 4294967296 // Final mix and normalize to [0,1)
+          value: ((t ^ (t >>> 14)) >>> 0) / 4294967296, // Final mix and normalize to [0,1)
         };
       }
 
@@ -691,7 +687,6 @@
           source.start();
         }
 
-
         playSiren() {
           if (!this.audioContext) return;
 
@@ -965,7 +960,13 @@
         SCALED_BULLET_BUFFER = SCALED_MAX_ASTEROID_RADIUS / 2; // Half the width of largest asteroid
 
         // Update canvas size and CSS properties only if dimensions changed or stars don't exist
-        if (documentObj && (GAME_WIDTH !== PREVIOUS_GAME_WIDTH || GAME_HEIGHT !== PREVIOUS_GAME_HEIGHT || !window.gameStars || window.gameStars.length === 0)) {
+        if (
+          documentObj &&
+          (GAME_WIDTH !== PREVIOUS_GAME_WIDTH ||
+            GAME_HEIGHT !== PREVIOUS_GAME_HEIGHT ||
+            !window.gameStars ||
+            window.gameStars.length === 0)
+        ) {
           let canvas = documentObj.getElementById("gameCanvas");
           if (canvas) {
             canvas.width = gameWidth;
@@ -973,7 +974,10 @@
           }
 
           // Update CSS variable for game info width only when needed
-          documentObj.documentElement.style.setProperty("--game-width", GAME_WIDTH + "px");
+          documentObj.documentElement.style.setProperty(
+            "--game-width",
+            GAME_WIDTH + "px",
+          );
 
           // Regenerate stars for new dimensions
           window.gameStars = [];
@@ -990,13 +994,13 @@
           if (PREVIOUS_GAME_WIDTH > 0 && PREVIOUS_GAME_HEIGHT > 0) {
             let scaleX = GAME_WIDTH / PREVIOUS_GAME_WIDTH;
             let scaleY = GAME_HEIGHT / PREVIOUS_GAME_HEIGHT;
-            
+
             // Scale ship position
             if (GameState && GameState.ship) {
               GameState.ship.x *= scaleX;
               GameState.ship.y *= scaleY;
             }
-            
+
             // Scale asteroid positions
             if (GameState && GameState.asteroids) {
               for (let asteroid of GameState.asteroids) {
@@ -1004,7 +1008,7 @@
                 asteroid.y *= scaleY;
               }
             }
-            
+
             // Scale bullet positions
             if (GameState && GameState.bullets) {
               for (let bullet of GameState.bullets) {
@@ -1012,7 +1016,7 @@
                 bullet.y *= scaleY;
               }
             }
-            
+
             // Scale particle positions
             if (GameState && GameState.particles) {
               for (let particle of GameState.particles) {
@@ -1020,7 +1024,7 @@
                 particle.y *= scaleY;
               }
             }
-            
+
             // Scale ship debris positions
             if (GameState && GameState.shipDebris) {
               for (let debris of GameState.shipDebris) {
@@ -1047,7 +1051,7 @@
       function createInitialGameState(overrides = {}) {
         let defaultLevel = overrides.level || initialLevel;
         let defaultSeed = overrides.seed || randomSeed;
-        
+
         return {
           ship: {
             x: GAME_WIDTH / 2,
@@ -1057,7 +1061,7 @@
             angle: -Math.PI / 2, // Start pointing up
             radius: SCALED_SHIP_RADIUS, // Using cached scaled constant
             thrusting: false,
-            ...overrides.ship
+            ...overrides.ship,
           },
 
           asteroids: [],
@@ -1081,10 +1085,10 @@
           titleSplashVisible: false,
           titleSplashFrameCount: 0,
           level: defaultLevel, // Current level/wave number (can be overridden by ?level= parameter)
-          
+
           // Global frame counter (increments every frame, useful for time-based logic)
           frameNumber: 0,
-          
+
           // Title splash frame tracking (null = not showing, number = frame when started)
           frameTitleFirstShownAt: null,
 
@@ -1107,9 +1111,9 @@
 
           // Sound system (will be injected based on test/production mode)
           sound: null,
-          
+
           // Apply any additional overrides
-          ...overrides
+          ...overrides,
         };
       }
 
@@ -1122,9 +1126,9 @@
       let ROTATION_SPEED_BASE = 5;
       let ROTATION_SPEED_MAX = 10;
       let BULLET_SPEED_MIN_MULTIPLIER = 0.75; // 25% slower
-      let BULLET_SPEED_MAX_MULTIPLIER = 1.7;  // 70% faster
+      let BULLET_SPEED_MAX_MULTIPLIER = 1.7; // 70% faster
       let BASE_FIRE_DELAY = 250; // Base fire delay at level 1 (milliseconds)
-      let MIN_FIRE_DELAY = 125;  // Minimum fire delay at level 20+ (milliseconds)
+      let MIN_FIRE_DELAY = 125; // Minimum fire delay at level 20+ (milliseconds)
 
       // Game configuration variables (mutable, not part of game state)
       let DEATH_BLOSSOM_ROTATION_COUNT = 12; // Number of full rotations before Death Blossom ends
@@ -1149,7 +1153,9 @@
           currentAcceleration = SHIP_ACCELERATION_MAX;
         } else {
           // Linear scaling from level 1 to 20
-          let accelerationIncrease = (SHIP_ACCELERATION_MAX - SHIP_ACCELERATION_BASE) * ((level - 1) / 19);
+          let accelerationIncrease =
+            (SHIP_ACCELERATION_MAX - SHIP_ACCELERATION_BASE) *
+            ((level - 1) / 19);
           currentAcceleration = SHIP_ACCELERATION_BASE + accelerationIncrease;
         }
         CURRENT_SHIP_ACCELERATION = scale(currentAcceleration);
@@ -1163,7 +1169,8 @@
           currentRotationSpeed = ROTATION_SPEED_MAX;
         } else {
           // Linear scaling from level 1 to 20 (desktop only)
-          let speedIncrease = (ROTATION_SPEED_MAX - ROTATION_SPEED_BASE) * ((level - 1) / 19);
+          let speedIncrease =
+            (ROTATION_SPEED_MAX - ROTATION_SPEED_BASE) * ((level - 1) / 19);
           currentRotationSpeed = ROTATION_SPEED_BASE + speedIncrease;
         }
         CURRENT_ROTATION_SPEED = currentRotationSpeed;
@@ -1177,7 +1184,8 @@
           currentBulletSpeed = maxBulletSpeed;
         } else {
           // Linear scaling from level 1 to 20
-          let speedIncrease = (maxBulletSpeed - minBulletSpeed) * ((level - 1) / 19);
+          let speedIncrease =
+            (maxBulletSpeed - minBulletSpeed) * ((level - 1) / 19);
           currentBulletSpeed = minBulletSpeed + speedIncrease;
         }
         CURRENT_BULLET_SPEED = scale(currentBulletSpeed);
@@ -1276,7 +1284,6 @@
       // Initialize game dimensions on load
       updateGameDimensions();
 
-
       // Interactive debug toggles
       let debugInfoVisible = false;
 
@@ -1345,6 +1352,10 @@
         );
       let isMobile = GameState.isMobileDevice; // Keep local variable for backward compatibility
       let touchStartY = null;
+      let touchStartX = null;
+      let isThrusting = false;
+      let isRotaryTouching = false;
+      let shipStartAngle = null;
 
       // Initialize level-dependent constants now that isMobile is defined
       updateLevelDependentConstants(GameState);
@@ -1402,10 +1413,6 @@
           activateDeathBlossom(GameState, currentTime);
         }
       }
-      let touchStartX = null;
-      let isThrusting = false;
-      let isRotaryTouching = false;
-      let shipStartAngle = null;
 
       // Get canvas reference for mobile touch events
       let canvas = document.getElementById("gameCanvas");
@@ -1483,7 +1490,7 @@
           if (isMobile) {
             // Set game state to indicate button fallback is available
             GameState.deathBlossomButtonFallbackEnabled = true;
-            
+
             updateDebug("Death Blossom button fallback enabled");
           }
         }
@@ -1491,7 +1498,7 @@
         // Set up Death Blossom button event listeners (mobile only)
         if (isMobile) {
           let dbButton = document.getElementById("deathBlossomButton");
-          
+
           // Add both touch and click handlers for Death Blossom button
           function handleDeathBlossomButtonActivation(e) {
             e.preventDefault();
@@ -1506,30 +1513,91 @@
               updateDebug("Death Blossom activated via button");
             }
           }
-          
-          dbButton.addEventListener("touchstart", handleDeathBlossomButtonActivation);
-          dbButton.addEventListener("click", handleDeathBlossomButtonActivation);
+
+          dbButton.addEventListener(
+            "touchstart",
+            handleDeathBlossomButtonActivation,
+          );
+          dbButton.addEventListener(
+            "click",
+            handleDeathBlossomButtonActivation,
+          );
 
           // Add double-tap to try shake detection (simpler than long press)
           let lastTap = 0;
           dbButton.addEventListener("click", (e) => {
-          let currentTime = new Date().getTime();
-          let timeSinceLastTap = currentTime - lastTap;
+            let currentTime = new Date().getTime();
+            let timeSinceLastTap = currentTime - lastTap;
 
-          if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-            // Double tap detected - try to enable shake detection
+            if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+              // Double tap detected - try to enable shake detection
+              if (
+                !GameState.motionPermissionGranted &&
+                GameState.userHasInteracted &&
+                !GameState.motionPermissionRequested
+              ) {
+                e.preventDefault();
+                GameState.motionPermissionRequested = true;
+                updateDebug(
+                  "Double tap detected - requesting motion permission...",
+                );
+
+                if (typeof DeviceMotionEvent.requestPermission === "function") {
+                  DeviceMotionEvent.requestPermission()
+                    .then((response) => {
+                      updateDebug("Permission: " + response);
+                      if (response === "granted") {
+                        GameState.motionPermissionGranted = true;
+                        window.addEventListener(
+                          "devicemotion",
+                          handleDeviceMotion,
+                          true,
+                        );
+                        updateDebug(
+                          "Motion listener added - shake your phone!",
+                        );
+                      } else {
+                        updateDebug("Permission denied via double tap");
+                      }
+                    })
+                    .catch((error) => {
+                      updateDebug(
+                        "Double tap permission error: " + error.message,
+                      );
+                    });
+                } else {
+                  GameState.motionPermissionGranted = true;
+                  window.addEventListener(
+                    "devicemotion",
+                    handleDeviceMotion,
+                    true,
+                  );
+                  updateDebug("Motion detection enabled via double tap");
+                }
+              }
+            }
+            lastTap = currentTime;
+          });
+        }
+
+        // Set up Shake Prompt button event listener (mobile only)
+        if (isMobile) {
+          let shakePromptButton = document.getElementById("shakePromptButton");
+          shakePromptButton.addEventListener("click", (e) => {
+            e.preventDefault();
+            shakePromptButton.style.display = "none";
+
+            // Request permission directly in the click handler (iOS requirement)
             if (
-              !GameState.motionPermissionGranted &&
-              GameState.userHasInteracted &&
-              !GameState.motionPermissionRequested
+              !GameState.motionPermissionRequested &&
+              window.DeviceMotionEvent
             ) {
-              e.preventDefault();
               GameState.motionPermissionRequested = true;
-              updateDebug(
-                "Double tap detected - requesting motion permission...",
-              );
+              updateDebug("Requesting motion permission...");
 
               if (typeof DeviceMotionEvent.requestPermission === "function") {
+                // iOS 13+ requires permission request from click event
+                updateDebug("iOS 13+ detected");
                 DeviceMotionEvent.requestPermission()
                   .then((response) => {
                     updateDebug("Permission: " + response);
@@ -1540,78 +1608,28 @@
                         handleDeviceMotion,
                         true,
                       );
-                      updateDebug(
-                        "Motion listener added - shake your phone!",
-                      );
+                      updateDebug("Shake detection enabled!");
                     } else {
-                      updateDebug("Permission denied via double tap");
+                      updateDebug("Permission denied");
+                      addDeathBlossomButton();
                     }
                   })
                   .catch((error) => {
-                    updateDebug(
-                      "Double tap permission error: " + error.message,
-                    );
+                    updateDebug("Error: " + error.message);
+                    addDeathBlossomButton();
                   });
               } else {
+                // Non-iOS device
                 GameState.motionPermissionGranted = true;
                 window.addEventListener(
                   "devicemotion",
                   handleDeviceMotion,
                   true,
                 );
-                updateDebug("Motion detection enabled via double tap");
+                updateDebug("Shake detection enabled!");
               }
             }
-            }
-            lastTap = currentTime;
           });
-        }
-
-        // Set up Shake Prompt button event listener (mobile only)
-        if (isMobile) {
-          let shakePromptButton = document.getElementById("shakePromptButton");
-          shakePromptButton.addEventListener("click", (e) => {
-          e.preventDefault();
-          shakePromptButton.style.display = "none";
-
-          // Request permission directly in the click handler (iOS requirement)
-          if (!GameState.motionPermissionRequested && window.DeviceMotionEvent) {
-            GameState.motionPermissionRequested = true;
-            updateDebug("Requesting motion permission...");
-
-            if (
-              typeof DeviceMotionEvent.requestPermission === "function"
-            ) {
-              // iOS 13+ requires permission request from click event
-              updateDebug("iOS 13+ detected");
-              DeviceMotionEvent.requestPermission()
-                .then((response) => {
-                  updateDebug("Permission: " + response);
-                  if (response === "granted") {
-                    GameState.motionPermissionGranted = true;
-                    window.addEventListener(
-                      "devicemotion",
-                      handleDeviceMotion,
-                      true,
-                    );
-                    updateDebug("Shake detection enabled!");
-                  } else {
-                    updateDebug("Permission denied");
-                    addDeathBlossomButton();
-                  }
-                })
-                .catch((error) => {
-                  updateDebug("Error: " + error.message);
-                  addDeathBlossomButton();
-                });
-            } else {
-              // Non-iOS device
-              GameState.motionPermissionGranted = true;
-              window.addEventListener("devicemotion", handleDeviceMotion, true);
-              updateDebug("Shake detection enabled!");
-            }
-          }
-        });
         }
 
         // Show tutorial after a brief delay
@@ -1623,117 +1641,120 @@
           try {
             e.preventDefault();
 
-          // Mark that user has interacted - we can now request motion permission later
-          if (!GameState.userHasInteracted) {
-            GameState.userHasInteracted = true;
-            updateDebug("User interaction detected");
+            // Mark that user has interacted - we can now request motion permission later
+            if (!GameState.userHasInteracted) {
+              GameState.userHasInteracted = true;
+              updateDebug("User interaction detected");
 
-            // Delay motion permission request to after the user has played a bit
-            setTimeout(() => {
-              if (
-                isMobile &&
-                GameState.deathBlossomAvailable &&
-                !GameState.motionPermissionRequested
-              ) {
-                updateDebug("🎮 Want to shake your phone for Death Blossom?");
-                updateDebug("Touch here to enable shake detection!");
+              // Delay motion permission request to after the user has played a bit
+              setTimeout(() => {
+                if (
+                  isMobile &&
+                  GameState.deathBlossomAvailable &&
+                  !GameState.motionPermissionRequested
+                ) {
+                  updateDebug("🎮 Want to shake your phone for Death Blossom?");
+                  updateDebug("Touch here to enable shake detection!");
 
-                // Show the existing shake prompt button
-                let shakePrompt = document.getElementById("shakePromptButton");
-                shakePrompt.style.display = "block";
+                  // Show the existing shake prompt button
+                  let shakePrompt =
+                    document.getElementById("shakePromptButton");
+                  shakePrompt.style.display = "block";
 
-                // Auto-hide after 10 seconds if not used
-                setTimeout(() => {
-                  if (shakePrompt.style.display === "block") {
-                    shakePrompt.style.display = "none";
-                    updateDebug("Shake prompt expired - using button fallback");
-                    if (!GameState.motionPermissionGranted) {
-                      addDeathBlossomButton();
+                  // Auto-hide after 10 seconds if not used
+                  setTimeout(() => {
+                    if (shakePrompt.style.display === "block") {
+                      shakePrompt.style.display = "none";
+                      updateDebug(
+                        "Shake prompt expired - using button fallback",
+                      );
+                      if (!GameState.motionPermissionGranted) {
+                        addDeathBlossomButton();
+                      }
                     }
-                  }
-                }, 10000);
-              }
-            }, 5000); // Wait 5 seconds after first interaction
-          }
-
-          // Resume audio context on first touch (iOS Safari requirement)
-          if (GameState.sound && GameState.sound.resumeAudio) {
-            GameState.sound.resumeAudio();
-            // Also try to play a silent sound to fully unlock audio on iOS
-            setTimeout(() => {
-              if (
-                GameState.sound.audioContext &&
-                GameState.sound.audioContext.state === "running"
-              ) {
-                let oscillator =
-                  GameState.sound.audioContext.createOscillator();
-                let gainNode = GameState.sound.audioContext.createGain();
-                gainNode.gain.setValueAtTime(
-                  0,
-                  GameState.sound.audioContext.currentTime,
-                );
-                oscillator.connect(gainNode);
-                gainNode.connect(GameState.sound.audioContext.destination);
-                oscillator.start();
-                oscillator.stop(
-                  GameState.sound.audioContext.currentTime + 0.01,
-                );
-              }
-            }, 100);
-          }
-
-          let touch = e.touches[0];
-          let rect = canvas.getBoundingClientRect();
-          let x = touch.clientX - rect.left;
-          let y = touch.clientY - rect.top;
-
-          touchStartX = x;
-          touchStartY = y;
-
-          // Check if touch is in top-center Death Blossom indicator area (play/pause zone)
-          let isInDeathBlossomArea =
-            x >= GAME_WIDTH * 0.4 && x <= GAME_WIDTH * 0.6 && y <= 70;
-
-          if (isInDeathBlossomArea) {
-            // Top-center area for play/pause toggle - don't thrust or rotate
-            // Handle pause toggle directly since the indicator element might be hidden
-            if (GameState && !GameState.gameOver) {
-              GameState.manualPauseToggleRequested = true;
+                  }, 10000);
+                }
+              }, 5000); // Wait 5 seconds after first interaction
             }
-          } else if (x < GAME_WIDTH * 0.2) {
-            // Left edge (20% of screen width) for linear position mapping
-            isRotaryTouching = true;
 
-            // Store the Y position where touch started and current ship angle
-            touchStartY = y;
-            shipStartAngle = GameState.ship.angle;
-          }
-          // Right edge (80-100% of screen width) for clockwise rotation
-          else if (x > GAME_WIDTH * 0.8) {
-            isRotaryTouching = true;
+            // Resume audio context on first touch (iOS Safari requirement)
+            if (GameState.sound && GameState.sound.resumeAudio) {
+              GameState.sound.resumeAudio();
+              // Also try to play a silent sound to fully unlock audio on iOS
+              setTimeout(() => {
+                if (
+                  GameState.sound.audioContext &&
+                  GameState.sound.audioContext.state === "running"
+                ) {
+                  let oscillator =
+                    GameState.sound.audioContext.createOscillator();
+                  let gainNode = GameState.sound.audioContext.createGain();
+                  gainNode.gain.setValueAtTime(
+                    0,
+                    GameState.sound.audioContext.currentTime,
+                  );
+                  oscillator.connect(gainNode);
+                  gainNode.connect(GameState.sound.audioContext.destination);
+                  oscillator.start();
+                  oscillator.stop(
+                    GameState.sound.audioContext.currentTime + 0.01,
+                  );
+                }
+              }, 100);
+            }
 
-            // Store the Y position where touch started and current ship angle
+            let touch = e.touches[0];
+            let rect = canvas.getBoundingClientRect();
+            let x = touch.clientX - rect.left;
+            let y = touch.clientY - rect.top;
+
+            touchStartX = x;
             touchStartY = y;
-            shipStartAngle = GameState.ship.angle;
-          } else {
-            // Middle area for thrust (excluding top-center Death Blossom area)
-            isThrusting = true;
-          }
+
+            // Check if touch is in top-center Death Blossom indicator area (play/pause zone)
+            let isInDeathBlossomArea =
+              x >= GAME_WIDTH * 0.4 && x <= GAME_WIDTH * 0.6 && y <= 70;
+
+            if (isInDeathBlossomArea) {
+              // Top-center area for play/pause toggle - don't thrust or rotate
+              // Handle pause toggle directly since the indicator element might be hidden
+              if (GameState && !GameState.gameOver) {
+                GameState.manualPauseToggleRequested = true;
+              }
+            } else if (x < GAME_WIDTH * 0.2) {
+              // Left edge (20% of screen width) for linear position mapping
+              isRotaryTouching = true;
+
+              // Store the Y position where touch started and current ship angle
+              touchStartY = y;
+              shipStartAngle = GameState.ship.angle;
+            }
+            // Right edge (80-100% of screen width) for clockwise rotation
+            else if (x > GAME_WIDTH * 0.8) {
+              isRotaryTouching = true;
+
+              // Store the Y position where touch started and current ship angle
+              touchStartY = y;
+              shipStartAngle = GameState.ship.angle;
+            } else {
+              // Middle area for thrust (excluding top-center Death Blossom area)
+              isThrusting = true;
+            }
           } catch (error) {
             // Prevent touch start errors from freezing the game on GitHub Pages
-            console.error('Touch start error:', error);
+            console.error("Touch start error:", error);
           }
         });
 
         canvas.addEventListener("touchmove", (e) => {
           try {
             e.preventDefault();
-            
+
             // Ensure we have touches and GameState before proceeding
             if (!e.touches || !e.touches[0] || !GameState || !GameState.ship) {
               return;
             }
-            
+
             let touch = e.touches[0];
             let rect = canvas.getBoundingClientRect();
             let x = touch.clientX - rect.left;
@@ -1750,7 +1771,10 @@
               let angleDelta = -(yDelta / GAME_HEIGHT) * angleRange;
 
               // Apply rotation relative to ship's starting angle (only if Death Blossom is not active)
-              if (!GameState.deathBlossomActive && typeof shipStartAngle === 'number') {
+              if (
+                !GameState.deathBlossomActive &&
+                typeof shipStartAngle === "number"
+              ) {
                 GameState.ship.angle = shipStartAngle + angleDelta;
               }
             }
@@ -1765,13 +1789,16 @@
               let angleDelta = (yDelta / GAME_HEIGHT) * angleRange;
 
               // Apply rotation relative to ship's starting angle (only if Death Blossom is not active)
-              if (!GameState.deathBlossomActive && typeof shipStartAngle === 'number') {
+              if (
+                !GameState.deathBlossomActive &&
+                typeof shipStartAngle === "number"
+              ) {
                 GameState.ship.angle = shipStartAngle + angleDelta;
               }
             }
           } catch (error) {
             // Prevent touch handling errors from freezing the game on GitHub Pages
-            console.error('Touch move error:', error);
+            console.error("Touch move error:", error);
             // Reset touch state to prevent stuck touches
             isRotaryTouching = false;
             isThrusting = false;
@@ -1788,7 +1815,7 @@
             shipStartAngle = null;
           } catch (error) {
             // Prevent touch end errors from freezing the game on GitHub Pages
-            console.error('Touch end error:', error);
+            console.error("Touch end error:", error);
             // Force reset touch state
             touchStartX = null;
             touchStartY = null;
@@ -1808,7 +1835,7 @@
             shipStartAngle = null;
           } catch (error) {
             // Prevent touch cancel errors from freezing the game on GitHub Pages
-            console.error('Touch cancel error:', error);
+            console.error("Touch cancel error:", error);
             // Force reset touch state
             touchStartX = null;
             touchStartY = null;
@@ -1909,7 +1936,13 @@
         state.particles.forEach((particle) => {
           ctx.fillStyle = `rgba(255, ${150 - particle.life}, 0, ${particle.life / 40})`;
           ctx.beginPath();
-          ctx.arc(particle.x, particle.y, SCALED_PARTICLE_RADIUS, 0, Math.PI * 2);
+          ctx.arc(
+            particle.x,
+            particle.y,
+            SCALED_PARTICLE_RADIUS,
+            0,
+            Math.PI * 2,
+          );
           ctx.fill();
         });
 
@@ -1948,20 +1981,22 @@
             ? "flex"
             : "none";
         }
-        
+
         // Show/hide Death Blossom button (mobile only)
-        let deathBlossomButton = documentObj.getElementById("deathBlossomButton");
-        
+        let deathBlossomButton =
+          documentObj.getElementById("deathBlossomButton");
+
         // Debug logging removed - tests now pass
-        
+
         if (deathBlossomButton) {
           // Only show button on mobile when Death Blossom is available AND fallback is enabled
-          let showButton = (state.deathBlossomAvailable && 
-                          state.isMobileDevice && 
-                          state.deathBlossomButtonFallbackEnabled);
-          
+          let showButton =
+            state.deathBlossomAvailable &&
+            state.isMobileDevice &&
+            state.deathBlossomButtonFallbackEnabled;
+
           // Logic verified by tests
-          
+
           deathBlossomButton.style.display = showButton ? "block" : "none";
         }
 
@@ -1987,8 +2022,7 @@
             );
             let desktopControls =
               pauseScreen.querySelector(".desktop-controls");
-            let mobileControls =
-              pauseScreen.querySelector(".mobile-controls");
+            let mobileControls = pauseScreen.querySelector(".mobile-controls");
             let isMobileDevice =
               /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
                 navigator.userAgent,
@@ -2036,14 +2070,17 @@
       }
 
       // New frame-based title splash alpha calculation
-      function calculateTitleSplashAlphaFromFrames(frameNumber, frameTitleFirstShownAt) {
+      function calculateTitleSplashAlphaFromFrames(
+        frameNumber,
+        frameTitleFirstShownAt,
+      ) {
         if (frameTitleFirstShownAt === null) return 0;
-        
+
         let framesSinceStart = frameNumber - frameTitleFirstShownAt;
-        let fadeInFrames = 60;   // 1 second fade in
-        let steadyFrames = 120;  // 2 seconds steady
-        let fadeOutFrames = 60;  // 1 second fade out
-        
+        let fadeInFrames = 60; // 1 second fade in
+        let steadyFrames = 120; // 2 seconds steady
+        let fadeOutFrames = 60; // 1 second fade out
+
         if (framesSinceStart < 0) return 0;
         if (framesSinceStart < fadeInFrames) {
           // Fade in: 0 to 1 over fadeInFrames
@@ -2051,12 +2088,13 @@
           return baseAlpha === 0 ? 0.017 : Math.max(0.017, baseAlpha); // Only apply minimum for frame 0
         }
         if (framesSinceStart < fadeInFrames + steadyFrames) {
-          // Steady state: full opacity  
+          // Steady state: full opacity
           return 1.0;
         }
         if (framesSinceStart < fadeInFrames + steadyFrames + fadeOutFrames) {
           // Fade out: 1 to 0 over fadeOutFrames
-          let fadeOutProgress = (framesSinceStart - fadeInFrames - steadyFrames) / fadeOutFrames;
+          let fadeOutProgress =
+            (framesSinceStart - fadeInFrames - steadyFrames) / fadeOutFrames;
           return Math.max(0, 1.0 - fadeOutProgress);
         }
         // Past total lifetime
@@ -2099,8 +2137,8 @@
 
         // Calculate alpha using new frame-based system
         let alpha = calculateTitleSplashAlphaFromFrames(
-          GameState.frameNumber, 
-          GameState.frameTitleFirstShownAt
+          GameState.frameNumber,
+          GameState.frameTitleFirstShownAt,
         );
 
         // If alpha is 0, we're done (state update will hide splash next frame)
@@ -2484,7 +2522,7 @@
         // Screen wrapping for bullets - allow penetration beyond viewport before wrapping
         let maxAsteroidRadius = SCALED_MAX_ASTEROID_RADIUS; // Largest possible asteroid radius
         let bulletBuffer = maxAsteroidRadius / 2; // Half the width of largest asteroid
-        
+
         state.bullets = state.bullets.filter((bullet) => {
           let oldX = bullet.x;
           let oldY = bullet.y;
@@ -2499,10 +2537,12 @@
 
           // Screen wrapping for bullets
           if (bullet.x < -bulletBuffer) bullet.x = GAME_WIDTH + bulletBuffer;
-          else if (bullet.x > GAME_WIDTH + bulletBuffer) bullet.x = -bulletBuffer;
+          else if (bullet.x > GAME_WIDTH + bulletBuffer)
+            bullet.x = -bulletBuffer;
 
           if (bullet.y < -bulletBuffer) bullet.y = GAME_HEIGHT + bulletBuffer;
-          else if (bullet.y > GAME_HEIGHT + bulletBuffer) bullet.y = -bulletBuffer;
+          else if (bullet.y > GAME_HEIGHT + bulletBuffer)
+            bullet.y = -bulletBuffer;
 
           // Remove bullet if it has traveled more than half a screen diagonal
           let maxDistance =
@@ -2844,10 +2884,7 @@
               );
 
               // Handle asteroid collision (explosion, splitting, etc.)
-              let collisionData = handleAsteroidCollision(
-                newState,
-                asteroid,
-              );
+              let collisionData = handleAsteroidCollision(newState, asteroid);
               let collisionResult = collisionData.collisionResult;
               newState = collisionData.updatedState;
 
@@ -2890,16 +2927,16 @@
           newState.level++;
           // Update cached level-dependent constants
           updateLevelDependentConstants(newState);
-          let asteroidsToSpawn =
-            ASTEROID_SPAWN_COUNT + (newState.level - 1);
+          let asteroidsToSpawn = ASTEROID_SPAWN_COUNT + (newState.level - 1);
           newState = spawnAsteroids(newState, asteroidsToSpawn);
         }
 
         // Title splash management using frame-based system
         if (newState.frameTitleFirstShownAt !== null) {
-          let framesSinceStart = newState.frameNumber - newState.frameTitleFirstShownAt;
+          let framesSinceStart =
+            newState.frameNumber - newState.frameTitleFirstShownAt;
           let totalTitleFrames = 60 + 120 + 60; // fade in + steady + fade out = 240 frames
-          
+
           if (framesSinceStart >= totalTitleFrames) {
             // Title splash has expired, hide it
             newState.frameTitleFirstShownAt = null;
@@ -2921,7 +2958,8 @@
           // Calculate safe radius - reduce by half after 5 seconds of waiting
           let waitingTime = currentTime - newState.waitingForRespawnStartTime;
           let baseSafeRadius = SCALED_SAFE_RADIUS; // Safe radius around spawn point (20% larger, about 4.8x ship radius)
-          let safeRadius = waitingTime > 5000 ? baseSafeRadius / 2 : baseSafeRadius;
+          let safeRadius =
+            waitingTime > 5000 ? baseSafeRadius / 2 : baseSafeRadius;
 
           // Desperation bomb after 10 seconds - destroy all asteroids in spawn area
           if (waitingTime > 10000) {
@@ -2931,7 +2969,10 @@
             // Find and destroy asteroids within bomb radius
             for (let i = newState.asteroids.length - 1; i >= 0; i--) {
               let asteroid = newState.asteroids[i];
-              if (distance(spawnPoint, asteroid) < bombRadius + asteroid.radius) {
+              if (
+                distance(spawnPoint, asteroid) <
+                bombRadius + asteroid.radius
+              ) {
                 // Create explosion effect at asteroid location
                 newState = createExplosion(newState, asteroid.x, asteroid.y);
                 // Remove asteroid (no points awarded)
@@ -2952,9 +2993,7 @@
           newState.ship.vx = 0;
           newState.ship.vy = 0;
 
-          if (
-            isSpawnAreaClear(newState, safeRadius)
-          ) {
+          if (isSpawnAreaClear(newState, safeRadius)) {
             // Safe to respawn - ship is already positioned and retains its current angle
             newState.waitingForRespawn = false;
             newState.waitingForRespawnStartTime = 0;
@@ -2980,7 +3019,7 @@
         );
 
         let newParticles = [...state.particles];
-        
+
         for (let i = 0; i < particlesToAdd; i++) {
           let angle = state.rng.next() * Math.PI * 2;
           let speed = 50 + state.rng.next() * 150;
@@ -2993,10 +3032,10 @@
             life: 30 + Math.floor(state.rng.next() * 20),
           });
         }
-        
+
         return {
           ...state,
-          particles: newParticles
+          particles: newParticles,
         };
       }
 
@@ -3074,52 +3113,103 @@
             life: 40 + Math.floor(state.rng.next() * 30),
           });
         }
-        
+
         return {
           ...state,
           shipDebris: newShipDebris,
-          particles: newParticles
+          particles: newParticles,
         };
       }
 
       function spawnAsteroids(state, count) {
         let newAsteroids = [...state.asteroids];
-        
+
         // Define safe spawn regions around the ship's spawn area (center of screen)
         let spawnX = state.ship.x;
         let spawnY = state.ship.y;
         let safeRadius = SCALED_SAFE_RADIUS + SCALED_MAX_ASTEROID_RADIUS; // Safe radius + largest asteroid radius
-        
+
         // Define 8 regions that exclude the ship's safe spawn area
         let regions = [
           // Upper row
-          { name: "upper-left", minX: 0, maxX: spawnX - safeRadius, minY: 0, maxY: spawnY - safeRadius },
-          { name: "upper-center", minX: spawnX - safeRadius, maxX: spawnX + safeRadius, minY: 0, maxY: spawnY - safeRadius },
-          { name: "upper-right", minX: spawnX + safeRadius, maxX: GAME_WIDTH, minY: 0, maxY: spawnY - safeRadius },
-          
+          {
+            name: "upper-left",
+            minX: 0,
+            maxX: spawnX - safeRadius,
+            minY: 0,
+            maxY: spawnY - safeRadius,
+          },
+          {
+            name: "upper-center",
+            minX: spawnX - safeRadius,
+            maxX: spawnX + safeRadius,
+            minY: 0,
+            maxY: spawnY - safeRadius,
+          },
+          {
+            name: "upper-right",
+            minX: spawnX + safeRadius,
+            maxX: GAME_WIDTH,
+            minY: 0,
+            maxY: spawnY - safeRadius,
+          },
+
           // Middle row (left and right of spawn area)
-          { name: "middle-left", minX: 0, maxX: spawnX - safeRadius, minY: spawnY - safeRadius, maxY: spawnY + safeRadius },
-          { name: "middle-right", minX: spawnX + safeRadius, maxX: GAME_WIDTH, minY: spawnY - safeRadius, maxY: spawnY + safeRadius },
-          
+          {
+            name: "middle-left",
+            minX: 0,
+            maxX: spawnX - safeRadius,
+            minY: spawnY - safeRadius,
+            maxY: spawnY + safeRadius,
+          },
+          {
+            name: "middle-right",
+            minX: spawnX + safeRadius,
+            maxX: GAME_WIDTH,
+            minY: spawnY - safeRadius,
+            maxY: spawnY + safeRadius,
+          },
+
           // Lower row
-          { name: "lower-left", minX: 0, maxX: spawnX - safeRadius, minY: spawnY + safeRadius, maxY: GAME_HEIGHT },
-          { name: "lower-center", minX: spawnX - safeRadius, maxX: spawnX + safeRadius, minY: spawnY + safeRadius, maxY: GAME_HEIGHT },
-          { name: "lower-right", minX: spawnX + safeRadius, maxX: GAME_WIDTH, minY: spawnY + safeRadius, maxY: GAME_HEIGHT }
+          {
+            name: "lower-left",
+            minX: 0,
+            maxX: spawnX - safeRadius,
+            minY: spawnY + safeRadius,
+            maxY: GAME_HEIGHT,
+          },
+          {
+            name: "lower-center",
+            minX: spawnX - safeRadius,
+            maxX: spawnX + safeRadius,
+            minY: spawnY + safeRadius,
+            maxY: GAME_HEIGHT,
+          },
+          {
+            name: "lower-right",
+            minX: spawnX + safeRadius,
+            maxX: GAME_WIDTH,
+            minY: spawnY + safeRadius,
+            maxY: GAME_HEIGHT,
+          },
         ];
-        
+
         // Filter out regions that are too small or out of bounds
-        let validRegions = regions.filter(region => 
-          region.maxX > region.minX && 
-          region.maxY > region.minY &&
-          region.minX >= 0 && region.maxX <= GAME_WIDTH &&
-          region.minY >= 0 && region.maxY <= GAME_HEIGHT
+        let validRegions = regions.filter(
+          (region) =>
+            region.maxX > region.minX &&
+            region.maxY > region.minY &&
+            region.minX >= 0 &&
+            region.maxX <= GAME_WIDTH &&
+            region.minY >= 0 &&
+            region.maxY <= GAME_HEIGHT,
         );
-        
+
         for (let i = 0; i < count; i++) {
           // Pick a random valid region
           let regionIndex = Math.floor(state.rng.next() * validRegions.length);
           let region = validRegions[regionIndex];
-          
+
           // Generate random coordinates within the selected region
           let x = region.minX + state.rng.next() * (region.maxX - region.minX);
           let y = region.minY + state.rng.next() * (region.maxY - region.minY);
@@ -3128,10 +3218,10 @@
           state = asteroidData.state;
           newAsteroids.push(asteroidData.asteroid);
         }
-        
+
         return {
           ...state,
-          asteroids: newAsteroids
+          asteroids: newAsteroids,
         };
       }
 
@@ -3207,10 +3297,10 @@
           angle: 0,
           angularVelocity: (state.rng.next() - 0.5) * 2, // radians per second
         };
-        
+
         return {
           state: state,
-          asteroid: asteroid
+          asteroid: asteroid,
         };
       }
 
@@ -3224,12 +3314,12 @@
           vy: state.ship.vy + Math.sin(state.ship.angle) * bulletSpeed,
           distanceTraveled: 0,
         };
-        
+
         let newBullets = [...state.bullets, bullet];
-        
+
         return {
           ...state,
-          bullets: newBullets
+          bullets: newBullets,
         };
       }
 
@@ -3240,7 +3330,8 @@
         }
 
         // Linear scaling from level 1 to 20
-        let delayReduction = (BASE_FIRE_DELAY - MIN_FIRE_DELAY) * ((level - 1) / 19);
+        let delayReduction =
+          (BASE_FIRE_DELAY - MIN_FIRE_DELAY) * ((level - 1) / 19);
         return BASE_FIRE_DELAY - delayReduction;
       }
 
@@ -3266,12 +3357,16 @@
       function isSpawnAreaClear(state, safeRadius = null) {
         let spawnX = GAME_WIDTH / 2;
         let spawnY = GAME_HEIGHT / 2;
-        let effectiveSafeRadius = safeRadius !== null ? safeRadius : SCALED_SAFE_RADIUS;
-        
+        let effectiveSafeRadius =
+          safeRadius !== null ? safeRadius : SCALED_SAFE_RADIUS;
+
         let spawnPoint = { x: spawnX, y: spawnY };
         for (let i = 0; i < state.asteroids.length; i++) {
           let asteroid = state.asteroids[i];
-          if (distance(spawnPoint, asteroid) < effectiveSafeRadius + asteroid.radius) {
+          if (
+            distance(spawnPoint, asteroid) <
+            effectiveSafeRadius + asteroid.radius
+          ) {
             return false; // Asteroid too close to spawn point
           }
         }
@@ -3334,7 +3429,7 @@
               updatedState,
               asteroid.x + (updatedState.rng.next() - 0.5) * 40,
               asteroid.y + (updatedState.rng.next() - 0.5) * 40,
-              updatedState.level
+              updatedState.level,
             );
             updatedState = asteroidData.state;
             let smallAsteroid = asteroidData.asteroid;
@@ -3378,7 +3473,7 @@
 
         return {
           collisionResult: result,
-          updatedState: updatedState
+          updatedState: updatedState,
         };
       }
 
@@ -3414,12 +3509,11 @@
           titleSplashFrameCount: 0,
           frameNumber: 0, // Start at frame 0
           frameTitleFirstShownAt: 0, // Show title immediately on game start
-          autoFire: false
+          autoFire: false,
         });
 
         // Spawn initial asteroids based on level (progressive difficulty)
-        let asteroidsToSpawn =
-          ASTEROID_SPAWN_COUNT + (GameState.level - 1);
+        let asteroidsToSpawn = ASTEROID_SPAWN_COUNT + (GameState.level - 1);
         GameState = spawnAsteroids(GameState, asteroidsToSpawn);
 
         // Update level display
@@ -3566,9 +3660,10 @@
         function describe(name, fn) {
           // Check if this test suite should run based on enabled suites
           let suiteName = name.toLowerCase();
-          let shouldRun = enabledSuites.some(suite =>
-            suiteName.includes(suite.toLowerCase()) ||
-            (suite === 'unit' && !suiteName.includes('performance'))
+          let shouldRun = enabledSuites.some(
+            (suite) =>
+              suiteName.includes(suite.toLowerCase()) ||
+              (suite === "unit" && !suiteName.includes("performance")),
           );
 
           if (!shouldRun) {
@@ -4309,12 +4404,7 @@
               }
 
               // Test that holding Escape doesn't toggle again
-              let stillPausedState = updateGameState(
-                newState,
-                keys,
-                0.1,
-                1000,
-              );
+              let stillPausedState = updateGameState(newState, keys, 0.1, 1000);
               if (!stillPausedState.paused) {
                 throw new Error(
                   "Game should remain paused when Escape key is held",
@@ -4535,11 +4625,16 @@
               let asteroidData = createAsteroid(testState, 100, 100, 1);
               let smallAsteroid = asteroidData.asteroid;
               smallAsteroid.baseRadius = ASTEROID_SPLIT_THRESHOLD - 5; // Small asteroid - will be destroyed
-              
+
               // Add several "out of the way" asteroids to prevent auto-spawn
               let farAsteroids = [];
               for (let i = 0; i < 3; i++) {
-                let farAsteroidData = createAsteroid(testState, -200, -200 - (i * 100), 1); // Far off-screen
+                let farAsteroidData = createAsteroid(
+                  testState,
+                  -200,
+                  -200 - i * 100,
+                  1,
+                ); // Far off-screen
                 farAsteroids.push(farAsteroidData.asteroid);
               }
               testState.asteroids = [smallAsteroid, ...farAsteroids];
@@ -4667,11 +4762,16 @@
               );
               let asteroid = asteroidData.asteroid;
               asteroid.baseRadius = ASTEROID_SPLIT_THRESHOLD - 5; // Small asteroid - should not split
-              
+
               // Add several "out of the way" asteroids to prevent auto-spawn
               let farAsteroids = [];
               for (let i = 0; i < 3; i++) {
-                let farAsteroidData = createAsteroid(testState, -200, -200 - (i * 100), 1); // Far off-screen
+                let farAsteroidData = createAsteroid(
+                  testState,
+                  -200,
+                  -200 - i * 100,
+                  1,
+                ); // Far off-screen
                 farAsteroids.push(farAsteroidData.asteroid);
               }
               testState.asteroids = [asteroid, ...farAsteroids];
@@ -4775,7 +4875,8 @@
 
               testState.asteroids.forEach((asteroid, i) => {
                 let dist = distance(asteroid, testState.ship);
-                let minSafeDistance = SCALED_SAFE_RADIUS + SCALED_MAX_ASTEROID_RADIUS; // Same logic as spawnAsteroids
+                let minSafeDistance =
+                  SCALED_SAFE_RADIUS + SCALED_MAX_ASTEROID_RADIUS; // Same logic as spawnAsteroids
                 if (dist < minSafeDistance) {
                   throw new Error(
                     `Asteroid ${i} spawned too close to ship (distance: ${dist}, minimum: ${minSafeDistance})`,
@@ -5487,39 +5588,45 @@
               GameState = createInitialGameState({
                 frameNumber: 0,
                 frameTitleFirstShownAt: 0,
-                titleSplashVisible: true
+                titleSplashVisible: true,
               });
               GameState.sound = new MockSoundInterface();
 
               // Verify initial state
               if (GameState.frameNumber !== 0) {
-                throw new Error(`Expected initial frame number 0, got ${GameState.frameNumber}`);
+                throw new Error(
+                  `Expected initial frame number 0, got ${GameState.frameNumber}`,
+                );
               }
 
               let initialAlpha = calculateTitleSplashAlphaFromFrames(
                 GameState.frameNumber,
-                GameState.frameTitleFirstShownAt
+                GameState.frameTitleFirstShownAt,
               );
               let expectedInitialAlpha = 0.017; // Math.max(0.017, 0/60)
               if (Math.abs(initialAlpha - expectedInitialAlpha) > 0.001) {
-                throw new Error(`Expected initial alpha ${expectedInitialAlpha}, got ${initialAlpha}`);
+                throw new Error(
+                  `Expected initial alpha ${expectedInitialAlpha}, got ${initialAlpha}`,
+                );
               }
 
               // Update game state multiple times to get past the minimum alpha threshold
               let newState = GameState;
               for (let i = 0; i < 3; i++) {
-                newState = updateGameState(newState, {}, 1/60, 16.67);
+                newState = updateGameState(newState, {}, 1 / 60, 16.67);
               }
 
               // Verify frame counter incremented
               if (newState.frameNumber !== 3) {
-                throw new Error(`Expected frame number 3 after updates, got ${newState.frameNumber}`);
+                throw new Error(
+                  `Expected frame number 3 after updates, got ${newState.frameNumber}`,
+                );
               }
 
               // Verify alpha increased (at frame 3, alpha should be 3/60 = 0.05, which > 0.017)
               let newAlpha = calculateTitleSplashAlphaFromFrames(
                 newState.frameNumber,
-                newState.frameTitleFirstShownAt
+                newState.frameTitleFirstShownAt,
               );
               if (newAlpha <= initialAlpha) {
                 throw new Error(
@@ -5540,7 +5647,7 @@
               GameState = createInitialGameState({
                 frameNumber: 0,
                 frameTitleFirstShownAt: 0,
-                titleSplashVisible: true
+                titleSplashVisible: true,
               });
               GameState.sound = new MockSoundInterface(); // Ensure sound interface exists
 
@@ -5548,12 +5655,7 @@
 
               // Update through first 30 frames (middle of fade-in)
               for (let i = 0; i < 30; i++) {
-                currentState = updateGameState(
-                  currentState,
-                  {},
-                  1/60,
-                  16.67
-                );
+                currentState = updateGameState(currentState, {}, 1 / 60, 16.67);
               }
 
               // Verify we're in fade-in phase
@@ -5573,7 +5675,7 @@
               // Verify alpha is in fade-in range (0 < alpha < 1)
               let alpha = calculateTitleSplashAlphaFromFrames(
                 currentState.frameNumber,
-                currentState.frameTitleFirstShownAt
+                currentState.frameTitleFirstShownAt,
               );
               if (alpha <= 0 || alpha >= 1) {
                 throw new Error(
@@ -5587,7 +5689,7 @@
               GameState = createInitialGameState({
                 frameNumber: 0,
                 frameTitleFirstShownAt: 0,
-                titleSplashVisible: true
+                titleSplashVisible: true,
               });
               GameState.sound = new MockSoundInterface(); // Initialize sound system to prevent null errors
 
@@ -5595,12 +5697,7 @@
 
               // Update through fade-in to steady state (60 + 30 = 90 frames)
               for (let i = 0; i < 90; i++) {
-                currentState = updateGameState(
-                  currentState,
-                  {},
-                  1/60,
-                  16.67
-                );
+                currentState = updateGameState(currentState, {}, 1 / 60, 16.67);
               }
 
               // Verify we're in steady state
@@ -5620,7 +5717,7 @@
               // Verify alpha is at full opacity
               let alpha = calculateTitleSplashAlphaFromFrames(
                 currentState.frameNumber,
-                currentState.frameTitleFirstShownAt
+                currentState.frameTitleFirstShownAt,
               );
               if (alpha !== 1) {
                 throw new Error(
@@ -5634,7 +5731,7 @@
               GameState = createInitialGameState({
                 frameNumber: 0,
                 frameTitleFirstShownAt: 0,
-                titleSplashVisible: true
+                titleSplashVisible: true,
               });
               GameState.sound = new MockSoundInterface(); // Initialize sound system to prevent null errors
 
@@ -5643,12 +5740,7 @@
 
               // Update past the total lifetime
               for (let i = 0; i < totalFrames + 5; i++) {
-                currentState = updateGameState(
-                  currentState,
-                  {},
-                  1/60,
-                  16.67
-                );
+                currentState = updateGameState(currentState, {}, 1 / 60, 16.67);
               }
 
               // Verify we've gone past total frames
@@ -5668,7 +5760,7 @@
               // Verify alpha is 0
               let alpha = calculateTitleSplashAlphaFromFrames(
                 currentState.frameNumber,
-                currentState.frameTitleFirstShownAt
+                currentState.frameTitleFirstShownAt,
               );
               if (alpha !== 0) {
                 throw new Error(
@@ -5716,10 +5808,20 @@
               explodingState.sound = new MockSoundInterface();
 
               // First update to move from shipExploding to waitingForRespawn (after 2+ seconds)
-              let afterExplosionState = updateGameState(explodingState, {}, 1/60, 2200);
-              
+              let afterExplosionState = updateGameState(
+                explodingState,
+                {},
+                1 / 60,
+                2200,
+              );
+
               // Then update again to complete the respawn process
-              let newState = updateGameState(afterExplosionState, {}, 1/60, 2300);
+              let newState = updateGameState(
+                afterExplosionState,
+                {},
+                1 / 60,
+                2300,
+              );
 
               // Verify ship respawned
               if (newState.shipExploding) {
@@ -5752,104 +5854,135 @@
               // Test the NEW frame-based title splash system
               let initialState = createInitialGameState({
                 frameNumber: 0,
-                frameTitleFirstShownAt: 0  // Title starts at frame 0
+                frameTitleFirstShownAt: 0, // Title starts at frame 0
               });
               initialState.sound = new MockSoundInterface();
 
               // Test alpha progression over multiple frames
               let testFrames = [0, 10, 30, 60, 120, 200, 240];
               let expectedAlphas = [];
-              
+
               for (let frame of testFrames) {
-                let testState = {...initialState, frameNumber: frame};
-                let alpha = calculateTitleSplashAlphaFromFrames(testState.frameNumber, testState.frameTitleFirstShownAt);
-                expectedAlphas.push({frame, alpha});
+                let testState = { ...initialState, frameNumber: frame };
+                let alpha = calculateTitleSplashAlphaFromFrames(
+                  testState.frameNumber,
+                  testState.frameTitleFirstShownAt,
+                );
+                expectedAlphas.push({ frame, alpha });
               }
 
               // Verify fade progression: should increase, stay steady, then decrease
               let fadeInAlpha = expectedAlphas[1].alpha; // Frame 10
-              let steadyAlpha = expectedAlphas[4].alpha; // Frame 120 
+              let steadyAlpha = expectedAlphas[4].alpha; // Frame 120
               let fadeOutAlpha = expectedAlphas[5].alpha; // Frame 200
-              let finalAlpha = expectedAlphas[6].alpha;   // Frame 240
+              let finalAlpha = expectedAlphas[6].alpha; // Frame 240
 
               if (fadeInAlpha >= steadyAlpha) {
-                throw new Error(`Alpha should increase during fade-in: frame 10 alpha ${fadeInAlpha} >= steady alpha ${steadyAlpha}`);
+                throw new Error(
+                  `Alpha should increase during fade-in: frame 10 alpha ${fadeInAlpha} >= steady alpha ${steadyAlpha}`,
+                );
               }
               if (steadyAlpha !== 1.0) {
-                throw new Error(`Alpha should be 1.0 during steady state, got ${steadyAlpha}`);
+                throw new Error(
+                  `Alpha should be 1.0 during steady state, got ${steadyAlpha}`,
+                );
               }
               if (fadeOutAlpha >= steadyAlpha) {
-                throw new Error(`Alpha should decrease during fade-out: fade-out alpha ${fadeOutAlpha} >= steady alpha ${steadyAlpha}`);
+                throw new Error(
+                  `Alpha should decrease during fade-out: fade-out alpha ${fadeOutAlpha} >= steady alpha ${steadyAlpha}`,
+                );
               }
               if (finalAlpha !== 0) {
-                throw new Error(`Alpha should be 0 after total lifetime, got ${finalAlpha}`);
+                throw new Error(
+                  `Alpha should be 0 after total lifetime, got ${finalAlpha}`,
+                );
               }
             });
-
 
             it("should actually apply alpha to canvas during render at different frames", function () {
               // Test that the render function uses the correct alpha values
               let mockCanvas = {
-                getContext: () => mockCanvasContext
+                getContext: () => mockCanvasContext,
               };
               let originalGetElementById = document.getElementById;
               document.getElementById = (id) => {
-                if (id === 'gameCanvas') return mockCanvas;
-                if (id === 'gameOverScreen') return { style: { display: 'none' } };
+                if (id === "gameCanvas") return mockCanvas;
+                if (id === "gameOverScreen")
+                  return { style: { display: "none" } };
                 return originalGetElementById.call(document, id);
               };
 
               // Reset globalAlpha tracking
               mockCanvasContext.globalAlpha = 1.0;
               let alphasUsed = [];
-              
+
               // Override globalAlpha setter to track what values are being set
-              Object.defineProperty(mockCanvasContext, 'globalAlpha', {
-                set: function(value) {
+              Object.defineProperty(mockCanvasContext, "globalAlpha", {
+                set: function (value) {
                   alphasUsed.push(value);
                   this._globalAlpha = value;
                 },
-                get: function() {
+                get: function () {
                   return this._globalAlpha;
                 },
-                configurable: true
+                configurable: true,
               });
 
               // Test different frame states
               let testCases = [
-                {frame: 0, frameTitleFirstShownAt: 0, expectedAlphaRange: [0.01, 0.02]},   // Start of fade-in
-                {frame: 30, frameTitleFirstShownAt: 0, expectedAlphaRange: [0.4, 0.6]},   // Mid fade-in  
-                {frame: 120, frameTitleFirstShownAt: 0, expectedAlphaRange: [0.9, 1.0]},  // Steady state
-                {frame: 200, frameTitleFirstShownAt: 0, expectedAlphaRange: [0.6, 0.8]},  // Mid fade-out
+                {
+                  frame: 0,
+                  frameTitleFirstShownAt: 0,
+                  expectedAlphaRange: [0.01, 0.02],
+                }, // Start of fade-in
+                {
+                  frame: 30,
+                  frameTitleFirstShownAt: 0,
+                  expectedAlphaRange: [0.4, 0.6],
+                }, // Mid fade-in
+                {
+                  frame: 120,
+                  frameTitleFirstShownAt: 0,
+                  expectedAlphaRange: [0.9, 1.0],
+                }, // Steady state
+                {
+                  frame: 200,
+                  frameTitleFirstShownAt: 0,
+                  expectedAlphaRange: [0.6, 0.8],
+                }, // Mid fade-out
               ];
 
               for (let testCase of testCases) {
                 alphasUsed = []; // Reset tracking
-                
+
                 // Create test state
                 GameState = createInitialGameState({
                   frameNumber: testCase.frame,
                   frameTitleFirstShownAt: testCase.frameTitleFirstShownAt,
-                  titleSplashVisible: true
+                  titleSplashVisible: true,
                 });
-                
+
                 // Call render function
                 render(GameState);
-                
+
                 // Check that alpha values were applied to canvas
                 if (alphasUsed.length === 0) {
-                  throw new Error(`No alpha values were applied during render for frame ${testCase.frame}`);
+                  throw new Error(
+                    `No alpha values were applied during render for frame ${testCase.frame}`,
+                  );
                 }
-                
+
                 // Find the max alpha used (should be close to our calculated alpha)
                 let maxAlphaUsed = Math.max(...alphasUsed);
                 let [minExpected, maxExpected] = testCase.expectedAlphaRange;
-                
+
                 if (maxAlphaUsed < minExpected || maxAlphaUsed > maxExpected) {
-                  throw new Error(`Frame ${testCase.frame}: expected alpha ${minExpected}-${maxExpected}, got max ${maxAlphaUsed}. All alphas: ${alphasUsed}`);
+                  throw new Error(
+                    `Frame ${testCase.frame}: expected alpha ${minExpected}-${maxExpected}, got max ${maxAlphaUsed}. All alphas: ${alphasUsed}`,
+                  );
                 }
               }
-              
+
               // Restore original getElementById
               document.getElementById = originalGetElementById;
             });
@@ -5858,27 +5991,38 @@
               // Test that updateGameState properly handles the new frame-based system
               let initialState = createInitialGameState({
                 frameNumber: 10,
-                frameTitleFirstShownAt: 0,  // Title started at frame 0
-                titleSplashVisible: true
+                frameTitleFirstShownAt: 0, // Title started at frame 0
+                titleSplashVisible: true,
               });
               initialState.sound = new MockSoundInterface();
 
               // Run updateGameState
-              let updatedState = updateGameState(initialState, {}, 1/60, 16.67);
+              let updatedState = updateGameState(
+                initialState,
+                {},
+                1 / 60,
+                16.67,
+              );
 
               // Check that frameNumber incremented
               if (updatedState.frameNumber !== 11) {
-                throw new Error(`Expected frameNumber to increment from 10 to 11, got ${updatedState.frameNumber}`);
+                throw new Error(
+                  `Expected frameNumber to increment from 10 to 11, got ${updatedState.frameNumber}`,
+                );
               }
 
               // Check that frameTitleFirstShownAt is preserved
               if (updatedState.frameTitleFirstShownAt !== 0) {
-                throw new Error(`Expected frameTitleFirstShownAt to stay 0, got ${updatedState.frameTitleFirstShownAt}`);
+                throw new Error(
+                  `Expected frameTitleFirstShownAt to stay 0, got ${updatedState.frameTitleFirstShownAt}`,
+                );
               }
 
               // Check that titleSplashVisible is still true (should be in fade-in phase)
               if (!updatedState.titleSplashVisible) {
-                throw new Error(`Expected titleSplashVisible to be true during fade-in phase`);
+                throw new Error(
+                  `Expected titleSplashVisible to be true during fade-in phase`,
+                );
               }
             });
           });
@@ -6185,14 +6329,8 @@
                 testState.lastFireTime = 1000;
 
                 // Normal fire interval is 250ms, Death Blossom is 25ms
-                let shouldFireAt1025 = shouldDeathBlossomFire(
-                  testState,
-                  1025,
-                );
-                let shouldFireAt1024 = shouldDeathBlossomFire(
-                  testState,
-                  1024,
-                );
+                let shouldFireAt1025 = shouldDeathBlossomFire(testState, 1025);
+                let shouldFireAt1024 = shouldDeathBlossomFire(testState, 1024);
 
                 if (!shouldFireAt1025) {
                   throw new Error("Should fire after 25ms interval");
@@ -6295,8 +6433,7 @@
                 let almostTwelveRotations = 11.9 * 2 * Math.PI;
                 updateDeathBlossomState(
                   testState,
-                  almostTwelveRotations /
-                    DEATH_BLOSSOM_ROTATION_SPEED,
+                  almostTwelveRotations / DEATH_BLOSSOM_ROTATION_SPEED,
                   1000,
                 );
 
@@ -6627,7 +6764,12 @@
                 });
 
                 // Create proper asteroid at same position as ship
-                let asteroidData = createAsteroid(initialState, shipX, shipY, 1);
+                let asteroidData = createAsteroid(
+                  initialState,
+                  shipX,
+                  shipY,
+                  1,
+                );
                 let asteroid = asteroidData.asteroid;
                 asteroid.baseRadius = ASTEROID_SPLIT_THRESHOLD; // At threshold
                 initialState.asteroids = [asteroid];
@@ -6907,11 +7049,16 @@
               let asteroidData = createAsteroid(testState, 200, 200, 1);
               let asteroid = asteroidData.asteroid;
               asteroid.baseRadius = ASTEROID_SPLIT_THRESHOLD; // At threshold
-              
+
               // Add several "out of the way" asteroids to prevent auto-spawn
               let farAsteroids = [];
               for (let i = 0; i < 3; i++) {
-                let farAsteroidData = createAsteroid(testState, -200, -200 - (i * 100), 1); // Far off-screen
+                let farAsteroidData = createAsteroid(
+                  testState,
+                  -200,
+                  -200 - i * 100,
+                  1,
+                ); // Far off-screen
                 farAsteroids.push(farAsteroidData.asteroid);
               }
               testState.asteroids = [asteroid, ...farAsteroids];
@@ -7557,17 +7704,19 @@
             it("should hide Death Blossom button on mobile when shake detection not activated", function () {
               let mockButton = {
                 style: { display: "none" }, // Initial CSS state
-                setAttribute: function() {},
-                getAttribute: function() { return null; }
+                setAttribute: function () {},
+                getAttribute: function () {
+                  return null;
+                },
               };
-              
+
               let mockDocument = {
-                getElementById: function(id) {
+                getElementById: function (id) {
                   if (id === "deathBlossomButton") {
                     return mockButton;
                   }
                   return null;
-                }
+                },
               };
 
               let testState = {
@@ -7575,59 +7724,65 @@
                 isMobileDevice: true,
                 deathBlossomButtonFallbackEnabled: false, // Shake detection not failed yet
                 gameOver: false,
-                paused: false
+                paused: false,
               };
 
               // Simulate initial render before shake detection is determined
               render(testState, mockDocument);
-              
+
               if (mockButton.style.display !== "none") {
-                throw new Error("Death Blossom button should be hidden initially on mobile before shake detection is determined");
+                throw new Error(
+                  "Death Blossom button should be hidden initially on mobile before shake detection is determined",
+                );
               }
             });
 
             it("should show Death Blossom button on mobile when shake detection fails", function () {
               let mockButton = {
                 style: { display: "none" },
-                setAttribute: function() {},
-                getAttribute: function() { return null; }
+                setAttribute: function () {},
+                getAttribute: function () {
+                  return null;
+                },
               };
-              
+
               let mockCanvas = {
-                getContext: function() { 
+                getContext: function () {
                   return {
-                    fillRect: function() {},
-                    clearRect: function() {},
-                    save: function() {},
-                    restore: function() {},
-                    translate: function() {},
-                    rotate: function() {},
-                    scale: function() {},
-                    beginPath: function() {},
-                    arc: function() {},
-                    fill: function() {},
-                    stroke: function() {},
-                    moveTo: function() {},
-                    lineTo: function() {},
-                    closePath: function() {},
-                    fillText: function() {},
-                    strokeText: function() {},
-                    measureText: function() { return { width: 10 }; },
+                    fillRect: function () {},
+                    clearRect: function () {},
+                    save: function () {},
+                    restore: function () {},
+                    translate: function () {},
+                    rotate: function () {},
+                    scale: function () {},
+                    beginPath: function () {},
+                    arc: function () {},
+                    fill: function () {},
+                    stroke: function () {},
+                    moveTo: function () {},
+                    lineTo: function () {},
+                    closePath: function () {},
+                    fillText: function () {},
+                    strokeText: function () {},
+                    measureText: function () {
+                      return { width: 10 };
+                    },
                     globalAlpha: 1,
-                    fillStyle: '#000000',
-                    strokeStyle: '#000000',
+                    fillStyle: "#000000",
+                    strokeStyle: "#000000",
                     lineWidth: 1,
-                    font: '16px Arial',
-                    textAlign: 'center',
-                    textBaseline: 'middle'
+                    font: "16px Arial",
+                    textAlign: "center",
+                    textBaseline: "middle",
                   };
                 },
                 width: 800,
-                height: 600
+                height: 600,
               };
 
               let mockDocument = {
-                getElementById: function(id) {
+                getElementById: function (id) {
                   if (id === "deathBlossomButton") {
                     return mockButton;
                   }
@@ -7636,9 +7791,9 @@
                   }
                   return null;
                 },
-                querySelector: function(selector) {
+                querySelector: function (selector) {
                   return null; // Return null for all querySelector calls during testing
-                }
+                },
               };
 
               let testState = {
@@ -7654,33 +7809,37 @@
                 paused: false,
                 score: 0,
                 lives: 3,
-                level: 1
+                level: 1,
               };
 
               // Simulate render after shake detection failed and fallback was activated
               render(testState, mockDocument);
-              
+
               // Test should pass now with proper mock setup
-              
+
               if (mockButton.style.display !== "block") {
-                throw new Error("Death Blossom button should be visible on mobile when shake detection fails");
+                throw new Error(
+                  "Death Blossom button should be visible on mobile when shake detection fails",
+                );
               }
             });
 
             it("should hide Death Blossom button on desktop even when available", function () {
               let mockButton = {
                 style: { display: "none" },
-                setAttribute: function() {},
-                getAttribute: function() { return null; }
+                setAttribute: function () {},
+                getAttribute: function () {
+                  return null;
+                },
               };
-              
+
               let mockDocument = {
-                getElementById: function(id) {
+                getElementById: function (id) {
                   if (id === "deathBlossomButton") {
                     return mockButton;
                   }
                   return null;
-                }
+                },
               };
 
               let testState = {
@@ -7688,30 +7847,34 @@
                 isMobileDevice: false, // Desktop device
                 deathBlossomButtonFallbackEnabled: true, // Even if enabled, should not show on desktop
                 gameOver: false,
-                paused: false
+                paused: false,
               };
 
               render(testState, mockDocument);
-              
+
               if (mockButton.style.display !== "none") {
-                throw new Error("Death Blossom button should never be visible on desktop");
+                throw new Error(
+                  "Death Blossom button should never be visible on desktop",
+                );
               }
             });
 
             it("should hide Death Blossom button when Death Blossom not available", function () {
               let mockButton = {
                 style: { display: "none" },
-                setAttribute: function() {},
-                getAttribute: function() { return null; }
+                setAttribute: function () {},
+                getAttribute: function () {
+                  return null;
+                },
               };
-              
+
               let mockDocument = {
-                getElementById: function(id) {
+                getElementById: function (id) {
                   if (id === "deathBlossomButton") {
                     return mockButton;
                   }
                   return null;
-                }
+                },
               };
 
               let testState = {
@@ -7719,13 +7882,15 @@
                 isMobileDevice: true,
                 deathBlossomButtonFallbackEnabled: true, // Even if fallback enabled, should not show when not available
                 gameOver: false,
-                paused: false
+                paused: false,
               };
 
               render(testState, mockDocument);
-              
+
               if (mockButton.style.display !== "none") {
-                throw new Error("Death Blossom button should be hidden when Death Blossom is not available");
+                throw new Error(
+                  "Death Blossom button should be hidden when Death Blossom is not available",
+                );
               }
             });
           });
@@ -7808,7 +7973,7 @@
                 asteroids: [
                   { x: 100, y: 100, radius: 30 }, // Far from spawn
                   { x: spawnX, y: spawnY - 30, radius: 20 }, // Close to spawn
-                ]
+                ],
               };
               let safeRadius = 80;
 
@@ -7853,12 +8018,7 @@
               });
 
               let keysPressed = { ArrowLeft: true, ArrowUp: true, " ": true };
-              let newState = updateGameState(
-                testState,
-                keysPressed,
-                0.1,
-                1000,
-              );
+              let newState = updateGameState(testState, keysPressed, 0.1, 1000);
 
               // Rotation should work
               if (newState.ship.angle >= 0) {
@@ -8058,10 +8218,19 @@
               let baseSafeRadius = scale(96);
               let reducedSafeRadius = baseSafeRadius / 2;
               let asteroidRadius = scale(30);
-              let asteroidDistance = reducedSafeRadius + asteroidRadius + scale(5); // Just outside reduced zone
+              let asteroidDistance =
+                reducedSafeRadius + asteroidRadius + scale(5); // Just outside reduced zone
 
               let testState = {
-                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: SCALED_SHIP_RADIUS, thrusting: false },
+                ship: {
+                  x: spawnX,
+                  y: spawnY,
+                  vx: 0,
+                  vy: 0,
+                  angle: 0,
+                  radius: SCALED_SHIP_RADIUS,
+                  thrusting: false,
+                },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
@@ -8073,14 +8242,30 @@
                 bullets: [],
                 particles: [],
                 shipDebris: [],
-                asteroids: [{
-                  x: spawnX + asteroidDistance, y: spawnY,
-                  vx: 0, vy: 0,
-                  baseRadius: 30, radius: asteroidRadius,
-                  basePoints: [[30, 0], [0, 30], [-30, 0], [0, -30]],
-                  points: [[30, 0], [0, 30], [-30, 0], [0, -30]],
-                  angle: 0, angularVelocity: 0
-                }],
+                asteroids: [
+                  {
+                    x: spawnX + asteroidDistance,
+                    y: spawnY,
+                    vx: 0,
+                    vy: 0,
+                    baseRadius: 30,
+                    radius: asteroidRadius,
+                    basePoints: [
+                      [30, 0],
+                      [0, 30],
+                      [-30, 0],
+                      [0, -30],
+                    ],
+                    points: [
+                      [30, 0],
+                      [0, 30],
+                      [-30, 0],
+                      [0, -30],
+                    ],
+                    angle: 0,
+                    angularVelocity: 0,
+                  },
+                ],
                 kidMode: false,
                 autoFire: false,
                 lastFireTime: 0,
@@ -8090,18 +8275,32 @@
 
               // Test at 4 seconds - should still be waiting (full safe zone)
               let fourSecondsLater = waitingStartTime + 4000;
-              let result4s = updateGameState(testState, {}, 16.67, fourSecondsLater);
+              let result4s = updateGameState(
+                testState,
+                {},
+                16.67,
+                fourSecondsLater,
+              );
 
               if (!result4s.waitingForRespawn) {
-                throw new Error("Ship should still be waiting after 4 seconds with full safe zone");
+                throw new Error(
+                  "Ship should still be waiting after 4 seconds with full safe zone",
+                );
               }
 
               // Test at 6 seconds - should be able to respawn (reduced safe zone)
               let sixSecondsLater = waitingStartTime + 6000;
-              let result6s = updateGameState(testState, {}, 16.67, sixSecondsLater);
+              let result6s = updateGameState(
+                testState,
+                {},
+                16.67,
+                sixSecondsLater,
+              );
 
               if (result6s.waitingForRespawn) {
-                throw new Error("Ship should be able to respawn after 5 seconds with reduced safe zone");
+                throw new Error(
+                  "Ship should be able to respawn after 5 seconds with reduced safe zone",
+                );
               }
             });
 
@@ -8118,55 +8317,113 @@
               let farDistance = bombRadius + asteroidRadius + scale(10); // Outside bomb radius
 
               let testState = createTestState({
-                ship: { x: spawnX, y: spawnY, vx: 0, vy: 0, angle: 0, radius: SCALED_SHIP_RADIUS, thrusting: false },
+                ship: {
+                  x: spawnX,
+                  y: spawnY,
+                  vx: 0,
+                  vy: 0,
+                  angle: 0,
+                  radius: SCALED_SHIP_RADIUS,
+                  thrusting: false,
+                },
                 shipExploding: false,
                 waitingForRespawn: true,
                 waitingForRespawnStartTime: waitingStartTime,
                 lives: 2,
                 score: 100, // Track score to ensure no points awarded
                 asteroids: [
-                  { // Close asteroid - should be destroyed
-                    x: spawnX + closeDistance, y: spawnY,
-                    vx: 0, vy: 0,
-                    baseRadius: 20, radius: asteroidRadius,
-                    basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
-                    points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
-                    angle: 0, angularVelocity: 0
+                  {
+                    // Close asteroid - should be destroyed
+                    x: spawnX + closeDistance,
+                    y: spawnY,
+                    vx: 0,
+                    vy: 0,
+                    baseRadius: 20,
+                    radius: asteroidRadius,
+                    basePoints: [
+                      [20, 0],
+                      [0, 20],
+                      [-20, 0],
+                      [0, -20],
+                    ],
+                    points: [
+                      [20, 0],
+                      [0, 20],
+                      [-20, 0],
+                      [0, -20],
+                    ],
+                    angle: 0,
+                    angularVelocity: 0,
                   },
-                  { // Far asteroid - should survive
-                    x: spawnX + farDistance, y: spawnY,
-                    vx: 0, vy: 0,
-                    baseRadius: 20, radius: asteroidRadius,
-                    basePoints: [[20, 0], [0, 20], [-20, 0], [0, -20]],
-                    points: [[20, 0], [0, 20], [-20, 0], [0, -20]],
-                    angle: 0, angularVelocity: 0
-                  }
-                ]
+                  {
+                    // Far asteroid - should survive
+                    x: spawnX + farDistance,
+                    y: spawnY,
+                    vx: 0,
+                    vy: 0,
+                    baseRadius: 20,
+                    radius: asteroidRadius,
+                    basePoints: [
+                      [20, 0],
+                      [0, 20],
+                      [-20, 0],
+                      [0, -20],
+                    ],
+                    points: [
+                      [20, 0],
+                      [0, 20],
+                      [-20, 0],
+                      [0, -20],
+                    ],
+                    angle: 0,
+                    angularVelocity: 0,
+                  },
+                ],
               });
 
               // Test at 9 seconds - bomb should not trigger yet
               let nineSecondsLater = waitingStartTime + 9000;
-              let result9s = updateGameState(testState, {}, 16.67, nineSecondsLater);
+              let result9s = updateGameState(
+                testState,
+                {},
+                16.67,
+                nineSecondsLater,
+              );
 
               if (result9s.asteroids.length !== 2) {
-                throw new Error(`Expected 2 asteroids before bomb, got ${result9s.asteroids.length}`);
+                throw new Error(
+                  `Expected 2 asteroids before bomb, got ${result9s.asteroids.length}`,
+                );
               }
               if (result9s.score !== 100) {
-                throw new Error(`Score should not change before bomb, expected 100, got ${result9s.score}`);
+                throw new Error(
+                  `Score should not change before bomb, expected 100, got ${result9s.score}`,
+                );
               }
 
               // Test at 11 seconds - bomb should trigger and destroy close asteroid
               let elevenSecondsLater = waitingStartTime + 11000;
-              let result11s = updateGameState(testState, {}, 16.67, elevenSecondsLater);
+              let result11s = updateGameState(
+                testState,
+                {},
+                16.67,
+                elevenSecondsLater,
+              );
 
               if (result11s.asteroids.length !== 1) {
-                throw new Error(`Expected 1 asteroid after bomb (far one survives), got ${result11s.asteroids.length}`);
+                throw new Error(
+                  `Expected 1 asteroid after bomb (far one survives), got ${result11s.asteroids.length}`,
+                );
               }
               if (result11s.score !== 100) {
-                throw new Error(`Score should not increase from desperation bomb, expected 100, got ${result11s.score}`);
+                throw new Error(
+                  `Score should not increase from desperation bomb, expected 100, got ${result11s.score}`,
+                );
               }
               if (result11s.particles.length === 0) {
-                throw new Error("Explosion particles should be created by desperation bomb");
+                throw new Error(
+                  "Explosion particles should be created by desperation bomb",
+                );
               }
             });
           });
@@ -8175,9 +8432,9 @@
         describe("Performance Tests", function () {
           it("should detect performance degradation over successive frame batches", function () {
             // Set up global variables needed by updateGameState
-            if (typeof global !== 'undefined') {
+            if (typeof global !== "undefined") {
               global.keysPressed = {}; // Node.js environment
-            } else if (typeof keysPressed === 'undefined') {
+            } else if (typeof keysPressed === "undefined") {
               window.keysPressed = {}; // Browser environment
             }
 
@@ -8190,7 +8447,7 @@
               playShoot: () => {},
               playShipExplosion: () => {},
               playAsteroidExplosion: () => {},
-              playExtraLife: () => {}
+              playExtraLife: () => {},
             };
             // Update constants for level 20
             updateLevelDependentConstants(testState);
@@ -8200,7 +8457,12 @@
             for (let i = 0; i < 30; i++) {
               let x = testState.rng.next() * GAME_WIDTH;
               let y = testState.rng.next() * GAME_HEIGHT;
-              let asteroidData = createAsteroid(testState, x, y, testState.level);
+              let asteroidData = createAsteroid(
+                testState,
+                x,
+                y,
+                testState.level,
+              );
               testState.asteroids.push(asteroidData.asteroid);
             }
 
@@ -8223,7 +8485,7 @@
                 y: testState.rng.next() * GAME_HEIGHT,
                 vx: (testState.rng.next() - 0.5) * 400, // High velocity bullets
                 vy: (testState.rng.next() - 0.5) * 400,
-                distanceTraveled: Math.floor(testState.rng.next() * 100) // Random distance already traveled
+                distanceTraveled: Math.floor(testState.rng.next() * 100), // Random distance already traveled
               });
             }
 
@@ -8235,7 +8497,9 @@
             let batchTimes = [];
 
             console.log(`Performance Degradation Test:`);
-            console.log(`  Measuring ${numBatches} batches of ${updatesPerBatch} frames each`);
+            console.log(
+              `  Measuring ${numBatches} batches of ${updatesPerBatch} frames each`,
+            );
 
             // Run multiple batches and measure performance degradation
             for (let batch = 0; batch < numBatches; batch++) {
@@ -8247,10 +8511,22 @@
                 // Debug first few frames to see if auto-fire is working
                 if (batch === 0 && i < 5) {
                   let bulletsBefore = testState.bullets.length;
-                  testState = updateGameState(testState, mockKeysPressed, deltaTime, currentTime);
-                  console.log(`    Frame ${i}: bullets ${bulletsBefore} -> ${testState.bullets.length}`);
+                  testState = updateGameState(
+                    testState,
+                    mockKeysPressed,
+                    deltaTime,
+                    currentTime,
+                  );
+                  console.log(
+                    `    Frame ${i}: bullets ${bulletsBefore} -> ${testState.bullets.length}`,
+                  );
                 } else {
-                  testState = updateGameState(testState, mockKeysPressed, deltaTime, currentTime);
+                  testState = updateGameState(
+                    testState,
+                    mockKeysPressed,
+                    deltaTime,
+                    currentTime,
+                  );
                 }
 
                 // Prevent asteroids from spawning new levels (keep asteroid count stable)
@@ -8259,7 +8535,12 @@
                   for (let j = 0; j < 30; j++) {
                     let x = testState.rng.next() * GAME_WIDTH;
                     let y = testState.rng.next() * GAME_HEIGHT;
-                    let asteroidData = createAsteroid(testState, x, y, testState.level);
+                    let asteroidData = createAsteroid(
+                      testState,
+                      x,
+                      y,
+                      testState.level,
+                    );
                     testState.asteroids.push(asteroidData.asteroid);
                   }
                 }
@@ -8270,29 +8551,42 @@
               let avgTimePerFrame = batchTime / updatesPerBatch;
               batchTimes.push(batchTime);
 
-              console.log(`  Batch ${batch + 1}: ${batchTime.toFixed(2)}ms total, ${avgTimePerFrame.toFixed(4)}ms/frame`);
-              console.log(`    State: ${testState.asteroids.length} asteroids, ${testState.bullets.length} bullets, ${testState.particles.length} particles`);
+              console.log(
+                `  Batch ${batch + 1}: ${batchTime.toFixed(2)}ms total, ${avgTimePerFrame.toFixed(4)}ms/frame`,
+              );
+              console.log(
+                `    State: ${testState.asteroids.length} asteroids, ${testState.bullets.length} bullets, ${testState.particles.length} particles`,
+              );
             }
 
             // Calculate performance degradation
             let firstBatchTime = batchTimes[0];
             let lastBatchTime = batchTimes[batchTimes.length - 1];
-            let degradationPercent = ((lastBatchTime - firstBatchTime) / firstBatchTime) * 100;
+            let degradationPercent =
+              ((lastBatchTime - firstBatchTime) / firstBatchTime) * 100;
 
             console.log(`Performance Analysis:`);
             console.log(`  First batch: ${firstBatchTime.toFixed(2)}ms`);
             console.log(`  Last batch: ${lastBatchTime.toFixed(2)}ms`);
-            console.log(`  Performance degradation: ${degradationPercent.toFixed(1)}%`);
+            console.log(
+              `  Performance degradation: ${degradationPercent.toFixed(1)}%`,
+            );
 
             // Test should pass if performance degradation is less than 20%
             if (degradationPercent > 20) {
-              throw new Error(`Performance degradation test failed: ${degradationPercent.toFixed(1)}% degradation exceeds 20% threshold`);
+              throw new Error(
+                `Performance degradation test failed: ${degradationPercent.toFixed(1)}% degradation exceeds 20% threshold`,
+              );
             }
 
             // Also verify that average frame time stays reasonable
-            let overallAvgTime = batchTimes.reduce((sum, time) => sum + time, 0) / (batchTimes.length * updatesPerBatch);
+            let overallAvgTime =
+              batchTimes.reduce((sum, time) => sum + time, 0) /
+              (batchTimes.length * updatesPerBatch);
             if (overallAvgTime > 16.67) {
-              throw new Error(`Overall performance test failed: ${overallAvgTime.toFixed(3)}ms per frame exceeds 16.67ms (60fps) target`);
+              throw new Error(
+                `Overall performance test failed: ${overallAvgTime.toFixed(3)}ms per frame exceeds 16.67ms (60fps) target`,
+              );
             }
           });
 
@@ -8311,13 +8605,19 @@
             let avgTimePerCall = (totalTime / iterations) * 1000; // Convert to microseconds
 
             console.log(`Scale Function Performance:`);
-            console.log(`  Total time for ${iterations} calls: ${totalTime.toFixed(2)}ms`);
-            console.log(`  Average time per call: ${avgTimePerCall.toFixed(3)}μs`);
+            console.log(
+              `  Total time for ${iterations} calls: ${totalTime.toFixed(2)}ms`,
+            );
+            console.log(
+              `  Average time per call: ${avgTimePerCall.toFixed(3)}μs`,
+            );
             console.log(`  Result sum (prevent optimization): ${result}`);
 
             // Scale function should be very fast - fail if over 10 microseconds per call
             if (avgTimePerCall > 10) {
-              throw new Error(`Scale function too slow: ${avgTimePerCall.toFixed(3)}μs per call exceeds 10μs target`);
+              throw new Error(
+                `Scale function too slow: ${avgTimePerCall.toFixed(3)}μs per call exceeds 10μs target`,
+              );
             }
           });
 
@@ -8330,7 +8630,7 @@
                 x: rng() * GAME_WIDTH,
                 y: rng() * GAME_HEIGHT,
                 dx: (rng() - 0.5) * 8,
-                dy: (rng() - 0.5) * 8
+                dy: (rng() - 0.5) * 8,
               });
             }
 
@@ -8354,12 +8654,18 @@
             let avgTimePerCalc = (totalTime / totalCalculations) * 1000; // Convert to microseconds
 
             console.log(`Bullet Buffer Calculation Performance:`);
-            console.log(`  Total time for ${totalCalculations} calculations: ${totalTime.toFixed(2)}ms`);
-            console.log(`  Average time per calculation: ${avgTimePerCalc.toFixed(3)}μs`);
+            console.log(
+              `  Total time for ${totalCalculations} calculations: ${totalTime.toFixed(2)}ms`,
+            );
+            console.log(
+              `  Average time per calculation: ${avgTimePerCalc.toFixed(3)}μs`,
+            );
 
             // Buffer calculation should be fast - fail if over 5 microseconds per calculation
             if (avgTimePerCalc > 5) {
-              throw new Error(`Buffer calculation too slow: ${avgTimePerCalc.toFixed(3)}μs per calculation exceeds 5μs target`);
+              throw new Error(
+                `Buffer calculation too slow: ${avgTimePerCalc.toFixed(3)}μs per calculation exceeds 5μs target`,
+              );
             }
           });
         });
@@ -8396,9 +8702,9 @@
             it("should regenerate stars when window dimensions change", function () {
               // Mock window and previous dimensions
               let mockWindow = { innerWidth: 800, innerHeight: 600 };
-              let mockDocument = { 
+              let mockDocument = {
                 getElementById: () => ({ width: 800, height: 600 }),
-                documentElement: { style: { setProperty: () => {} } }
+                documentElement: { style: { setProperty: () => {} } },
               };
 
               // Set up initial state - simulate small window
@@ -8408,24 +8714,31 @@
 
               // Call updateGameDimensions with small dimensions
               let result1 = updateGameDimensions(
-                { innerWidth: 400, innerHeight: 300 }, 
-                mockDocument
+                { innerWidth: 400, innerHeight: 300 },
+                mockDocument,
               );
 
               // Verify initial stars were created
               if (!window.gameStars) {
-                throw new Error("Stars should be generated on first updateGameDimensions call");
+                throw new Error(
+                  "Stars should be generated on first updateGameDimensions call",
+                );
               }
               if (window.gameStars.length !== 100) {
-                throw new Error(`Expected 100 stars, got ${window.gameStars.length}`);
+                throw new Error(
+                  `Expected 100 stars, got ${window.gameStars.length}`,
+                );
               }
 
               // Check that stars are within initial dimensions
-              let starsOutOfBounds = window.gameStars.filter(star => 
-                star.x >= 400 || star.y >= 300 || star.x < 0 || star.y < 0
+              let starsOutOfBounds = window.gameStars.filter(
+                (star) =>
+                  star.x >= 400 || star.y >= 300 || star.x < 0 || star.y < 0,
               );
               if (starsOutOfBounds.length > 0) {
-                throw new Error(`${starsOutOfBounds.length} stars are outside initial 400x300 bounds`);
+                throw new Error(
+                  `${starsOutOfBounds.length} stars are outside initial 400x300 bounds`,
+                );
               }
 
               // Store reference to initial stars
@@ -8433,8 +8746,8 @@
 
               // Now resize to larger dimensions
               let result2 = updateGameDimensions(
-                { innerWidth: 800, innerHeight: 600 }, 
-                mockDocument
+                { innerWidth: 800, innerHeight: 600 },
+                mockDocument,
               );
 
               // Verify stars were regenerated
@@ -8442,65 +8755,131 @@
                 throw new Error("Stars should still exist after resize");
               }
               if (window.gameStars.length !== 100) {
-                throw new Error(`Expected 100 stars after resize, got ${window.gameStars.length}`);
+                throw new Error(
+                  `Expected 100 stars after resize, got ${window.gameStars.length}`,
+                );
               }
 
               // Check that new stars are within new dimensions
-              let newStarsOutOfBounds = window.gameStars.filter(star => 
-                star.x >= 800 || star.y >= 600 || star.x < 0 || star.y < 0
+              let newStarsOutOfBounds = window.gameStars.filter(
+                (star) =>
+                  star.x >= 800 || star.y >= 600 || star.x < 0 || star.y < 0,
               );
               if (newStarsOutOfBounds.length > 0) {
-                throw new Error(`${newStarsOutOfBounds.length} stars are outside new 800x600 bounds`);
+                throw new Error(
+                  `${newStarsOutOfBounds.length} stars are outside new 800x600 bounds`,
+                );
               }
 
               // Verify stars were actually regenerated (should have different positions)
-              let starsChanged = window.gameStars.some((star, i) => 
-                star.x !== initialStars[i].x || star.y !== initialStars[i].y
+              let starsChanged = window.gameStars.some(
+                (star, i) =>
+                  star.x !== initialStars[i].x || star.y !== initialStars[i].y,
               );
               if (!starsChanged) {
-                throw new Error("Stars should have different positions after window resize");
+                throw new Error(
+                  "Stars should have different positions after window resize",
+                );
               }
 
               // Verify some stars now exist in the expanded area
-              let starsInExpandedArea = window.gameStars.filter(star => 
-                star.x >= 400 || star.y >= 300
+              let starsInExpandedArea = window.gameStars.filter(
+                (star) => star.x >= 400 || star.y >= 300,
               );
               if (starsInExpandedArea.length === 0) {
-                throw new Error("Some stars should be positioned in the newly expanded area");
+                throw new Error(
+                  "Some stars should be positioned in the newly expanded area",
+                );
               }
             });
 
             it("should scale coordinates of all game objects when window dimensions change", function () {
               // Mock document and window objects
-              let mockDocument = { 
+              let mockDocument = {
                 getElementById: () => ({ width: 400, height: 300 }),
-                documentElement: { style: { setProperty: () => {} } }
+                documentElement: { style: { setProperty: () => {} } },
               };
 
               // Set up initial small dimensions and create game state with objects
               window.gameStars = [];
               PREVIOUS_GAME_WIDTH = 400;
               PREVIOUS_GAME_HEIGHT = 300;
-              
+
               // Create test game state with various objects at known positions
               GameState = {
-                ship: { x: 200, y: 150, vx: 0, vy: 0, angle: 0, radius: 10, thrusting: false },
+                ship: {
+                  x: 200,
+                  y: 150,
+                  vx: 0,
+                  vy: 0,
+                  angle: 0,
+                  radius: 10,
+                  thrusting: false,
+                },
                 asteroids: [
-                  { x: 100, y: 75, vx: 1, vy: 1, angle: 0, radius: 20, rotationSpeed: 0.1 },
-                  { x: 300, y: 225, vx: -1, vy: -1, angle: 0, radius: 30, rotationSpeed: -0.1 }
+                  {
+                    x: 100,
+                    y: 75,
+                    vx: 1,
+                    vy: 1,
+                    angle: 0,
+                    radius: 20,
+                    rotationSpeed: 0.1,
+                  },
+                  {
+                    x: 300,
+                    y: 225,
+                    vx: -1,
+                    vy: -1,
+                    angle: 0,
+                    radius: 30,
+                    rotationSpeed: -0.1,
+                  },
                 ],
                 bullets: [
                   { x: 50, y: 50, vx: 2, vy: 0, age: 0, maxAge: 120 },
-                  { x: 350, y: 250, vx: -2, vy: 0, age: 10, maxAge: 120 }
+                  { x: 350, y: 250, vx: -2, vy: 0, age: 10, maxAge: 120 },
                 ],
                 particles: [
-                  { x: 150, y: 100, vx: 0.5, vy: 0.5, life: 30, maxLife: 30, color: "#ff0000" },
-                  { x: 250, y: 200, vx: -0.5, vy: -0.5, life: 20, maxLife: 30, color: "#00ff00" }
+                  {
+                    x: 150,
+                    y: 100,
+                    vx: 0.5,
+                    vy: 0.5,
+                    life: 30,
+                    maxLife: 30,
+                    color: "#ff0000",
+                  },
+                  {
+                    x: 250,
+                    y: 200,
+                    vx: -0.5,
+                    vy: -0.5,
+                    life: 20,
+                    maxLife: 30,
+                    color: "#00ff00",
+                  },
                 ],
                 shipDebris: [
-                  { x: 80, y: 60, vx: 1, vy: 1, angle: 0, rotationSpeed: 0.2, life: 40 },
-                  { x: 320, y: 240, vx: -1, vy: -1, angle: 0, rotationSpeed: -0.2, life: 35 }
-                ]
+                  {
+                    x: 80,
+                    y: 60,
+                    vx: 1,
+                    vy: 1,
+                    angle: 0,
+                    rotationSpeed: 0.2,
+                    life: 40,
+                  },
+                  {
+                    x: 320,
+                    y: 240,
+                    vx: -1,
+                    vy: -1,
+                    angle: 0,
+                    rotationSpeed: -0.2,
+                    life: 35,
+                  },
+                ],
               };
 
               // Store initial positions for comparison
@@ -8517,13 +8896,15 @@
 
               // Now resize to 2x larger dimensions (800x600)
               let result = updateGameDimensions(
-                { innerWidth: 800, innerHeight: 600 }, 
-                mockDocument
+                { innerWidth: 800, innerHeight: 600 },
+                mockDocument,
               );
 
               // Verify dimensions were updated
               if (GAME_WIDTH !== 800 || GAME_HEIGHT !== 600) {
-                throw new Error(`Expected dimensions 800x600, got ${GAME_WIDTH}x${GAME_HEIGHT}`);
+                throw new Error(
+                  `Expected dimensions 800x600, got ${GAME_WIDTH}x${GAME_HEIGHT}`,
+                );
               }
 
               // Calculate expected scale factors (2x for both dimensions)
@@ -8534,58 +8915,100 @@
               let expectedShipX = initialShipX * expectedScaleX;
               let expectedShipY = initialShipY * expectedScaleY;
               if (Math.abs(GameState.ship.x - expectedShipX) > 0.1) {
-                throw new Error(`Ship X should be ${expectedShipX}, got ${GameState.ship.x}`);
+                throw new Error(
+                  `Ship X should be ${expectedShipX}, got ${GameState.ship.x}`,
+                );
               }
               if (Math.abs(GameState.ship.y - expectedShipY) > 0.1) {
-                throw new Error(`Ship Y should be ${expectedShipY}, got ${GameState.ship.y}`);
+                throw new Error(
+                  `Ship Y should be ${expectedShipY}, got ${GameState.ship.y}`,
+                );
               }
 
               // Verify asteroid positions were scaled correctly
               let expectedAsteroid1X = initialAsteroid1X * expectedScaleX;
               let expectedAsteroid1Y = initialAsteroid1Y * expectedScaleY;
-              if (Math.abs(GameState.asteroids[0].x - expectedAsteroid1X) > 0.1) {
-                throw new Error(`Asteroid 1 X should be ${expectedAsteroid1X}, got ${GameState.asteroids[0].x}`);
+              if (
+                Math.abs(GameState.asteroids[0].x - expectedAsteroid1X) > 0.1
+              ) {
+                throw new Error(
+                  `Asteroid 1 X should be ${expectedAsteroid1X}, got ${GameState.asteroids[0].x}`,
+                );
               }
-              if (Math.abs(GameState.asteroids[0].y - expectedAsteroid1Y) > 0.1) {
-                throw new Error(`Asteroid 1 Y should be ${expectedAsteroid1Y}, got ${GameState.asteroids[0].y}`);
+              if (
+                Math.abs(GameState.asteroids[0].y - expectedAsteroid1Y) > 0.1
+              ) {
+                throw new Error(
+                  `Asteroid 1 Y should be ${expectedAsteroid1Y}, got ${GameState.asteroids[0].y}`,
+                );
               }
 
               // Verify bullet positions were scaled correctly
               let expectedBullet1X = initialBullet1X * expectedScaleX;
               let expectedBullet1Y = initialBullet1Y * expectedScaleY;
               if (Math.abs(GameState.bullets[0].x - expectedBullet1X) > 0.1) {
-                throw new Error(`Bullet 1 X should be ${expectedBullet1X}, got ${GameState.bullets[0].x}`);
+                throw new Error(
+                  `Bullet 1 X should be ${expectedBullet1X}, got ${GameState.bullets[0].x}`,
+                );
               }
               if (Math.abs(GameState.bullets[0].y - expectedBullet1Y) > 0.1) {
-                throw new Error(`Bullet 1 Y should be ${expectedBullet1Y}, got ${GameState.bullets[0].y}`);
+                throw new Error(
+                  `Bullet 1 Y should be ${expectedBullet1Y}, got ${GameState.bullets[0].y}`,
+                );
               }
 
               // Verify particle positions were scaled correctly
               let expectedParticle1X = initialParticle1X * expectedScaleX;
               let expectedParticle1Y = initialParticle1Y * expectedScaleY;
-              if (Math.abs(GameState.particles[0].x - expectedParticle1X) > 0.1) {
-                throw new Error(`Particle 1 X should be ${expectedParticle1X}, got ${GameState.particles[0].x}`);
+              if (
+                Math.abs(GameState.particles[0].x - expectedParticle1X) > 0.1
+              ) {
+                throw new Error(
+                  `Particle 1 X should be ${expectedParticle1X}, got ${GameState.particles[0].x}`,
+                );
               }
-              if (Math.abs(GameState.particles[0].y - expectedParticle1Y) > 0.1) {
-                throw new Error(`Particle 1 Y should be ${expectedParticle1Y}, got ${GameState.particles[0].y}`);
+              if (
+                Math.abs(GameState.particles[0].y - expectedParticle1Y) > 0.1
+              ) {
+                throw new Error(
+                  `Particle 1 Y should be ${expectedParticle1Y}, got ${GameState.particles[0].y}`,
+                );
               }
 
               // Verify ship debris positions were scaled correctly
               let expectedDebris1X = initialDebris1X * expectedScaleX;
               let expectedDebris1Y = initialDebris1Y * expectedScaleY;
-              if (Math.abs(GameState.shipDebris[0].x - expectedDebris1X) > 0.1) {
-                throw new Error(`Ship debris 1 X should be ${expectedDebris1X}, got ${GameState.shipDebris[0].x}`);
+              if (
+                Math.abs(GameState.shipDebris[0].x - expectedDebris1X) > 0.1
+              ) {
+                throw new Error(
+                  `Ship debris 1 X should be ${expectedDebris1X}, got ${GameState.shipDebris[0].x}`,
+                );
               }
-              if (Math.abs(GameState.shipDebris[0].y - expectedDebris1Y) > 0.1) {
-                throw new Error(`Ship debris 1 Y should be ${expectedDebris1Y}, got ${GameState.shipDebris[0].y}`);
+              if (
+                Math.abs(GameState.shipDebris[0].y - expectedDebris1Y) > 0.1
+              ) {
+                throw new Error(
+                  `Ship debris 1 Y should be ${expectedDebris1Y}, got ${GameState.shipDebris[0].y}`,
+                );
               }
 
               // Verify that non-coordinate properties were not affected
-              if (GameState.asteroids[0].vx !== 1 || GameState.asteroids[0].vy !== 1) {
-                throw new Error("Asteroid velocities should not be affected by coordinate scaling");
+              if (
+                GameState.asteroids[0].vx !== 1 ||
+                GameState.asteroids[0].vy !== 1
+              ) {
+                throw new Error(
+                  "Asteroid velocities should not be affected by coordinate scaling",
+                );
               }
-              if (GameState.bullets[0].age !== 0 || GameState.bullets[0].maxAge !== 120) {
-                throw new Error("Bullet age properties should not be affected by coordinate scaling");
+              if (
+                GameState.bullets[0].age !== 0 ||
+                GameState.bullets[0].maxAge !== 120
+              ) {
+                throw new Error(
+                  "Bullet age properties should not be affected by coordinate scaling",
+                );
               }
             });
           });
