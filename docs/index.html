@@ -5990,16 +5990,50 @@
             });
 
             it("should actually apply alpha to canvas during render at different frames", function () {
+              // Create mock canvas context for this test
+              let mockCanvasContext = {
+                fillRect: function() {},
+                clearRect: function() {},
+                save: function() {},
+                restore: function() {},
+                translate: function() {},
+                rotate: function() {},
+                scale: function() {},
+                beginPath: function() {},
+                arc: function() {},
+                fill: function() {},
+                stroke: function() {},
+                moveTo: function() {},
+                lineTo: function() {},
+                closePath: function() {},
+                fillText: function() {},
+                strokeText: function() {},
+                measureText: function() { return { width: 10 }; },
+                _globalAlpha: 1,
+                fillStyle: '#000000',
+                strokeStyle: '#000000',
+                lineWidth: 1,
+                font: '16px Arial',
+                textAlign: 'center',
+                textBaseline: 'middle'
+              };
+
               // Test that the render function uses the correct alpha values
               let mockCanvas = {
                 getContext: () => mockCanvasContext,
+                width: 800,
+                height: 600
               };
               let originalGetElementById = document.getElementById;
+              let originalQuerySelector = document.querySelector;
               document.getElementById = (id) => {
                 if (id === "gameCanvas") return mockCanvas;
                 if (id === "gameOverScreen")
                   return { style: { display: "none" } };
                 return originalGetElementById.call(document, id);
+              };
+              document.querySelector = (selector) => {
+                return null; // Return null for all querySelector calls during testing
               };
 
               // Reset globalAlpha tracking
@@ -6073,8 +6107,9 @@
                 }
               }
 
-              // Restore original getElementById
+              // Restore original DOM methods
               document.getElementById = originalGetElementById;
+              document.querySelector = originalQuerySelector;
             });
 
             it("should increment frameNumber and maintain frameTitleFirstShownAt through updateGameState", function () {
@@ -8760,32 +8795,6 @@
           });
         });
 
-        // Complete test execution message (only for browser - Node.js test runner handles its own summary)
-        if (!isNodeJS) {
-          // Add completion message to browser output
-          let testOutput = document.querySelector(".test-output");
-          if (testOutput) {
-            let completionElement = document.createElement("div");
-
-            if (testFailures === 0) {
-              completionElement.className = "test-completion"; // Green styling
-              completionElement.textContent = "All tests passed!";
-              console.log("\nAll tests passed!");
-            } else {
-              completionElement.className = "test-fail"; // Red styling
-              completionElement.textContent = `${testFailures} test${testFailures === 1 ? "" : "s"} failed!`;
-              completionElement.style.fontWeight = "bold";
-              completionElement.style.marginTop = "15px";
-              completionElement.style.fontSize = "14px";
-              console.log(
-                `\n${testFailures} test${testFailures === 1 ? "" : "s"} failed!`,
-              );
-            }
-
-            testOutput.appendChild(completionElement);
-          }
-        }
-
         // Window Resize Tests
         if (testSuites.includes("unit")) {
           describe("Window Resize", () => {
@@ -9102,6 +9111,32 @@
               }
             });
           });
+        }
+
+        // Complete test execution message (only for browser - Node.js test runner handles its own summary)
+        if (!isNodeJS) {
+          // Add completion message to browser output
+          let testOutput = document.querySelector(".test-output");
+          if (testOutput) {
+            let completionElement = document.createElement("div");
+
+            if (testFailures === 0) {
+              completionElement.className = "test-completion"; // Green styling
+              completionElement.textContent = "All tests passed!";
+              console.log("\nAll tests passed!");
+            } else {
+              completionElement.className = "test-fail"; // Red styling
+              completionElement.textContent = `${testFailures} test${testFailures === 1 ? "" : "s"} failed!`;
+              completionElement.style.fontWeight = "bold";
+              completionElement.style.marginTop = "15px";
+              completionElement.style.fontSize = "14px";
+              console.log(
+                `\n${testFailures} test${testFailures === 1 ? "" : "s"} failed!`,
+              );
+            }
+
+            testOutput.appendChild(completionElement);
+          }
         }
       }
       // END_PURE_JS_TEST_SUITE_DO_NOT_REMOVE_OR_ALTER_THIS //
