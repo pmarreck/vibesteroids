@@ -1,3 +1,5 @@
 node_modules
 cert.pem
 key.pem
+AGENTS*.md
+CLAUDE*.md
